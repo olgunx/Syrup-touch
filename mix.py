@@ -156,7 +156,31 @@ if CONFIG["MODE"] == "DEVICE":
     touch_cs = digitalio.DigitalInOut(board.D7)
     touch_irq = digitalio.DigitalInOut(board.D17)
     touch = xpt2046_circuitpython.Touch(spi, cs=touch_cs, interrupt=touch_irq)
-    
+
+    # ==========================================
+    # DC MOTORS (L9110S dual H-bridge modules)
+    # ==========================================
+    MOTOR_PIN_MAP = {
+        1: (board.D5, board.D6),    # M1: Pin 29 (GPIO 5),  Pin 31 (GPIO 6)
+        2: (board.D19, board.D13),  # M2: Pin 35 (GPIO 19), Pin 33 (GPIO 13)
+        3: (board.D12, board.D20),  # M3: Pin 32 (GPIO 12), Pin 38 (GPIO 20)
+        4: (board.D16, board.D21),  # M4: Pin 36 (GPIO 16), Pin 40 (GPIO 21)
+        5: (board.D0, board.D1),    # M5: Pin 27 (GPIO 0),  Pin 28 (GPIO 1)
+        6: (board.D26, board.D23),  # M6: Pin 37 (GPIO 26), Pin 16 (GPIO 23)
+        7: (board.D22, board.D27),  # M7: Pin 15 (GPIO 22), Pin 13 (GPIO 27)
+        8: (board.D4, board.D3),    # M8: Pin 7  (GPIO 4),  Pin 5  (GPIO 3)
+    }
+
+    motors = {}
+    for m_id, (pin1, pin2) in MOTOR_PIN_MAP.items():
+        in1 = digitalio.DigitalInOut(pin1)
+        in1.direction = digitalio.Direction.OUTPUT
+        in1.value = False
+        in2 = digitalio.DigitalInOut(pin2)
+        in2.direction = digitalio.Direction.OUTPUT
+        in2.value = False
+        motors[m_id] = {'IN1': in1, 'IN2': in2}
+
 else:
     print("💻 Simulator mode - Using mock display and touch input")
     print("   Click in the window to simulate touch input")
@@ -321,13 +345,13 @@ def draw_view_mix(mix_id, active_button=None):
             
         # Draw explicit BACK and OK buttons pushed further down
         color_back = (255, 50, 50) if active_button == "BACK" else (150, 0, 0)
-        color_ok   = (50, 255, 50) if active_button == "OK"   else (0, 150, 0)
+        color_pour = (50, 255, 50) if active_button == "POUR" else (0, 150, 0)
         
         c_draw.rectangle((10, 180, 150, 225), fill=color_back, outline=(255,255,255))
         c_draw.text((80, 202), "BACK", font=font_config, fill=(255, 255, 255), anchor="mm")
         
-        c_draw.rectangle((170, 180, 310, 225), fill=color_ok, outline=(255,255,255))
-        c_draw.text((240, 202), "OK", font=font_config, fill=(255, 255, 255), anchor="mm")
+        c_draw.rectangle((170, 180, 310, 225), fill=color_pour, outline=(255,255,255))
+        c_draw.text((240, 202), "POUR", font=font_config, fill=(255, 255, 255), anchor="mm")
 
     except TypeError:
         # Fallback for older systems
@@ -335,14 +359,14 @@ def draw_view_mix(mix_id, active_button=None):
         c_draw.rectangle((10, 180, 150, 225), fill=(150, 0, 0), outline=(255,255,255))
         c_draw.text((50, 195), "BACK", font=font_config, fill=(255, 255, 255))
         c_draw.rectangle((170, 180, 310, 225), fill=(0, 150, 0), outline=(255,255,255))
-        c_draw.text((210, 195), "OK", font=font_config, fill=(255, 255, 255))
+        c_draw.text((210, 195), "POUR", font=font_config, fill=(255, 255, 255))
 
     rotated = canvas.rotate(90, expand=True)
     image.paste(rotated, (0, 0), rotated)
     display.image(image)
 
-SECONDS_PER_UNIT = 0.5  # simulated pour time per unit
-INRUSH_DELAY    = 0.5   # 500ms stagger between motor starts
+SECONDS_PER_UNIT = 1.0  # pour time per unit (seconds)
+STAGGER_DELAY   = 0.5   # 500ms stagger between motor starts
 MAX_CONCURRENT  = 2     # max motors running at once
 
 def draw_pouring_screen(mix_id, running_motors, total_motors, overall_done, overall_total,
@@ -428,8 +452,8 @@ def simulate_pour(mix_id):
                 cur = finished_units + sum(p for _, _, p in running)
                 draw_pouring_screen(mix_id, [(m, a, p) for m, a, p in running],
                                     total_motors, cur, total_units, elapsed)
-                log(f"   ⏳ Inrush delay {int(INRUSH_DELAY*1000)}ms before next motor")
-                time.sleep(INRUSH_DELAY)
+                log(f"   ⏳ Inrush delay {int(STAGGER_DELAY*1000)}ms before next motor")
+                time.sleep(STAGGER_DELAY)
 
         # --- Display current state ---
         elapsed = time.time() - t0
@@ -459,6 +483,64 @@ def simulate_pour(mix_id):
 
     elapsed = time.time() - t0
     log(f"   🏁 Mix {mix_id} dispensing complete ({elapsed:.1f}s total).")
+
+def execute_pour(mix_id):
+    """Device mode: builds a staggered timeline and drives real motors."""
+    mix = syrup_data[str(mix_id)]
+    schedule = {}
+    current_start_time = 0.0
+
+    for i in range(1, 9):
+        units = mix[f"syrup_{i}"]
+        if units > 0:
+            duration = units * SECONDS_PER_UNIT
+            schedule[i] = {
+                'start_time': current_start_time,
+                'stop_time': current_start_time + duration,
+                'is_running': False,
+                'is_finished': False
+            }
+            current_start_time += STAGGER_DELAY
+
+    if not schedule:
+        log("Mix is empty. Nothing to pour!")
+        return
+
+    log(f"🚀 Starting staggered pour for Mix {mix_id}...")
+    start_time = time.time()
+
+    while True:
+        elapsed = time.time() - start_time
+        all_done = True
+
+        for m_id, timing in schedule.items():
+            if not timing['is_finished']:
+                all_done = False
+
+                if elapsed >= timing['start_time'] and not timing['is_running']:
+                    motors[m_id]['IN1'].value = True
+                    motors[m_id]['IN2'].value = False
+                    timing['is_running'] = True
+                    log(f"   [{elapsed:.2f}s] -> Motor {m_id} ON")
+
+                elif elapsed >= timing['stop_time'] and timing['is_running']:
+                    motors[m_id]['IN1'].value = False
+                    motors[m_id]['IN2'].value = False
+                    timing['is_running'] = False
+                    timing['is_finished'] = True
+                    log(f"   [{elapsed:.2f}s] -> Motor {m_id} OFF")
+
+        if all_done:
+            break
+
+        time.sleep(0.02)
+
+    # Safety shutoff
+    for m_id in schedule.keys():
+        motors[m_id]['IN1'].value = False
+        motors[m_id]['IN2'].value = False
+
+    log(f"🏁 Pour complete! Total time: {elapsed:.2f} seconds.")
 
 # Boot up
 reset_grid_colors()
@@ -550,11 +632,14 @@ while True:
                     reset_grid_colors()
                     draw_main_menu()
                 elif row == 0:
-                    # Visual Right side (OK button)
-                    draw_view_mix(current_view_mix, active_button="OK")
+                    # Visual Right side (POUR button)
+                    draw_view_mix(current_view_mix, active_button="POUR")
                     wait_for_release()
-                    # --- MOTOR SIMULATION WITH DELAYS ---
-                    simulate_pour(current_view_mix)
+                    APP_STATE = "POURING"
+                    if CONFIG["MODE"] == "DEVICE":
+                        execute_pour(current_view_mix)
+                    else:
+                        simulate_pour(current_view_mix)
                     APP_STATE = "MAIN_MENU"
                     reset_grid_colors()
                     draw_main_menu()

@@ -10,7 +10,7 @@ A touchscreen-controlled syrup dispensing machine with 8 independent pump/motor 
 |-----------|-------|-----------|
 | LCD Display | ILI9341 (240×320, 2.8") | SPI, 10 MHz |
 | Touch Controller | XPT2046 (resistive) | SPI (shared bus) |
-| Motor/Pump Drivers | 8 channels (peristaltic pumps) | GPIO |
+| Motor/Pump Drivers | 4× L9110S dual H-bridge module (8 channels) | GPIO |
 | Controller | Raspberry Pi (any model with SPI + GPIO) | — |
 
 ### GPIO Pin Mapping
@@ -28,10 +28,25 @@ A touchscreen-controlled syrup dispensing machine with 8 independent pump/motor 
 
 ### Motor Control
 
-- **8 independent motor/pump channels** (syrup_1 through syrup_8)
+Each L9110S module drives 2 motors. 4 modules provide 8 independent pump channels.
+Each motor uses a GPIO pair (IN1 = forward, IN2 = reverse). For pumps, only IN1 is driven HIGH to pour.
+
+| Motor | Syrup | L9110S Module | IN1 (BCM) | IN1 (Pin) | IN2 (BCM) | IN2 (Pin) |
+|-------|-------|---------------|-----------|-----------|-----------|-----------|
+| Motor 1 | syrup_1 | Module 1 - Ch A | GPIO 5  | Pin 29 | GPIO 6  | Pin 31 |
+| Motor 2 | syrup_2 | Module 1 - Ch B | GPIO 19 | Pin 35 | GPIO 13 | Pin 33 |
+| Motor 3 | syrup_3 | Module 2 - Ch A | GPIO 12 | Pin 32 | GPIO 20 | Pin 38 |
+| Motor 4 | syrup_4 | Module 2 - Ch B | GPIO 16 | Pin 36 | GPIO 21 | Pin 40 |
+| Motor 5 | syrup_5 | Module 3 - Ch A | GPIO 0  | Pin 27 | GPIO 1  | Pin 28 |
+| Motor 6 | syrup_6 | Module 3 - Ch B | GPIO 26 | Pin 37 | GPIO 23 | Pin 16 |
+| Motor 7 | syrup_7 | Module 4 - Ch A | GPIO 22 | Pin 15 | GPIO 27 | Pin 13 |
+| Motor 8 | syrup_8 | Module 4 - Ch B | GPIO 4  | Pin 7  | GPIO 3  | Pin 5  |
+
+> **Note:** IN2 pins are used for reverse direction. For unidirectional pumps, IN2 is kept LOW.
+
 - Max **2 motors** run concurrently to limit inrush current
 - **500 ms stagger delay** between starting motors in a pair
-- Pour rate: configurable (default 0.5 s per unit)
+- Pour rate: configurable (default 1.0 s per unit)
 
 ## Development Environment Setup (Linux)
 
@@ -141,8 +156,8 @@ CONFIG = {
     }
 }
 
-SECONDS_PER_UNIT = 0.5   # pour time per unit (seconds)
-INRUSH_DELAY     = 0.5   # stagger between motor starts (seconds)
+SECONDS_PER_UNIT = 1.0   # pour time per unit (seconds)
+STAGGER_DELAY    = 0.5   # stagger between motor starts (seconds)
 MAX_CONCURRENT   = 2     # max simultaneous motors
 ```
 
