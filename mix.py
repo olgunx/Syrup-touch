@@ -365,13 +365,13 @@ def draw_view_mix(mix_id, active_button=None):
     image.paste(rotated, (0, 0), rotated)
     display.image(image)
 
-SECONDS_PER_UNIT = 1.0  # pour time per unit (seconds)
+SECONDS_PER_UNIT = 10.0  # pour time per unit (seconds)
 STAGGER_DELAY   = 0.5   # 500ms stagger between motor starts
 MAX_CONCURRENT  = 2     # max motors running at once
 
 def draw_pouring_screen(mix_id, running_motors, total_motors, overall_done, overall_total,
-                        elapsed_sec):
-    """Draw pouring progress with overall bar and up to 2 active motor bars."""
+                        elapsed_sec, paused=False):
+    """Draw pouring progress with overall bar, active motor bars, and STOP/PAUSE buttons."""
     draw.rectangle((0, 0, width, height), fill=(0, 0, 0))
     canvas = Image.new('RGBA', (320, 240), (0, 20, 40, 255))
     c_draw = ImageDraw.Draw(canvas)
@@ -380,7 +380,9 @@ def draw_pouring_screen(mix_id, running_motors, total_motors, overall_done, over
 
     try:
         # --- Title ---
-        c_draw.text((160, 16), f"POURING MIX {mix_id}", font=font_config, fill=(255, 200, 0), anchor="mm")
+        title = f"PAUSED MIX {mix_id}" if paused else f"POURING MIX {mix_id}"
+        title_color = (255, 160, 0) if paused else (255, 200, 0)
+        c_draw.text((160, 16), title, font=font_config, fill=title_color, anchor="mm")
 
         # --- Overall progress bar (large, top) ---
         pct = int(overall_frac * 100)
@@ -389,7 +391,7 @@ def draw_pouring_screen(mix_id, running_motors, total_motors, overall_done, over
         c_draw.rectangle((ob_x, ob_y, ob_x + ob_w, ob_y + ob_h), outline=(255, 255, 255))
         of_w = int(ob_w * overall_frac)
         c_draw.rectangle((ob_x, ob_y, ob_x + of_w, ob_y + ob_h), fill=(0, 180, 255))
-        c_draw.text((160, ob_y + ob_h // 2), f"{overall_done}/{overall_total} units",
+        c_draw.text((160, ob_y + ob_h // 2), f"{overall_done:.1f}/{overall_total} ml",
                     font=font_small, fill=(255, 255, 255), anchor="mm")
 
         # --- Time info ---
@@ -404,15 +406,37 @@ def draw_pouring_screen(mix_id, running_motors, total_motors, overall_done, over
         c_draw.text((160, 130), f"Active motors ({len(running_motors)}/{total_motors} total)",
                     font=font_small, fill=(200, 200, 200), anchor="mm")
 
-        for i, (motor_id, amount, poured) in enumerate(running_motors):
-            y_base = 150 + i * 36
-            frac = poured / amount if amount > 0 else 0
-            label = f"M{motor_id}: {poured}/{amount}"
+        for i, (motor_id, amount, frac) in enumerate(running_motors):
+            y_base = 150 + i * 30
+            pct = int(frac * 100)
+            label = f"M{motor_id}: {pct}%"
             c_draw.text((30, y_base + 2), label, font=font_small, fill=(200, 200, 200), anchor="lm")
-            mb_x, mb_w, mb_h = 100, 200, 14
-            c_draw.rectangle((mb_x, y_base - 5, mb_x + mb_w, y_base - 5 + mb_h), outline=(180, 180, 180))
+            mb_x, mb_w, mb_h = 100, 200, 8
+            c_draw.rectangle((mb_x, y_base - 3, mb_x + mb_w, y_base - 3 + mb_h), outline=(180, 180, 180))
             mf_w = int(mb_w * frac)
-            c_draw.rectangle((mb_x, y_base - 5, mb_x + mf_w, y_base - 5 + mb_h), fill=(0, 200, 80))
+            c_draw.rectangle((mb_x, y_base - 3, mb_x + mf_w, y_base - 3 + mb_h), fill=(0, 200, 80))
+
+        # --- STOP and PAUSE/RESUME buttons at bottom ---
+        btn_y, btn_h = 200, 36
+        gap = 8
+        # STOP button (left half) — red
+        sb_x, sb_w = 20, 145
+        c_draw.rectangle((sb_x, btn_y, sb_x + sb_w, btn_y + btn_h), fill=(200, 30, 30))
+        c_draw.rectangle((sb_x, btn_y, sb_x + sb_w, btn_y + btn_h), outline=(255, 100, 100))
+        c_draw.text((sb_x + sb_w // 2, btn_y + btn_h // 2), "\u25A0  STOP", font=font_config, fill=(255, 255, 255), anchor="mm")
+        # PAUSE/RESUME button (right half) — orange/green
+        pb_x, pb_w = sb_x + sb_w + gap, 145
+        if paused:
+            pb_fill = (30, 160, 60)
+            pb_outline = (100, 220, 100)
+            pb_label = "\u25B6  RESUME"
+        else:
+            pb_fill = (200, 140, 0)
+            pb_outline = (255, 200, 80)
+            pb_label = "\u275A\u275A  PAUSE"
+        c_draw.rectangle((pb_x, btn_y, pb_x + pb_w, btn_y + btn_h), fill=pb_fill)
+        c_draw.rectangle((pb_x, btn_y, pb_x + pb_w, btn_y + btn_h), outline=pb_outline)
+        c_draw.text((pb_x + pb_w // 2, btn_y + btn_h // 2), pb_label, font=font_config, fill=(255, 255, 255), anchor="mm")
 
     except TypeError:
         c_draw.text((20, 20), f"Pouring Mix {mix_id}  {overall_done}/{overall_total}",
@@ -422,67 +446,149 @@ def draw_pouring_screen(mix_id, running_motors, total_motors, overall_done, over
     image.paste(rotated, (0, 0), rotated)
     display.image(image)
 
+def draw_summary_screen(mix_id, status, elapsed, motors_used, total_units):
+    """Show a summary after pouring finishes or is stopped."""
+    draw.rectangle((0, 0, width, height), fill=(0, 0, 0))
+    canvas = Image.new('RGBA', (320, 240), (0, 20, 40, 255))
+    c_draw = ImageDraw.Draw(canvas)
+
+    try:
+        if status == "complete":
+            c_draw.text((160, 30), "\u2714  POUR COMPLETE", font=font_config, fill=(0, 220, 80), anchor="mm")
+        else:
+            c_draw.text((160, 30), "\u2716  POUR STOPPED", font=font_config, fill=(220, 60, 60), anchor="mm")
+
+        c_draw.line((40, 55, 280, 55), fill=(80, 80, 80), width=1)
+
+        c_draw.text((160, 80), f"Mix {mix_id}", font=font_config, fill=(255, 255, 255), anchor="mm")
+        c_draw.text((160, 110), f"Time: {elapsed:.1f}s", font=font_config, fill=(200, 200, 200), anchor="mm")
+        c_draw.text((160, 140), f"Motors: {motors_used}", font=font_config, fill=(200, 200, 200), anchor="mm")
+        c_draw.text((160, 170), f"Volume: {total_units} ml", font=font_config, fill=(200, 200, 200), anchor="mm")
+
+        # OK button
+        c_draw.rectangle((110, 198, 210, 234), fill=(0, 120, 200), outline=(100, 180, 255))
+        c_draw.text((160, 216), "OK", font=font_config, fill=(255, 255, 255), anchor="mm")
+    except TypeError:
+        c_draw.text((20, 20), f"Pour done - Mix {mix_id}", font=font_config, fill=(255, 255, 255))
+
+    rotated = canvas.rotate(90, expand=True)
+    image.paste(rotated, (0, 0), rotated)
+    display.image(image)
+
+def check_buttons():
+    """Check if STOP or PAUSE/RESUME button was pressed. Returns 'stop', 'pause', or None."""
+    raw = touch.get_coordinates()
+    if raw is None:
+        return None
+    raw_x, raw_y = raw
+    # Buttons are at canvas y=200..236 -> rotated: raw_x ~ 200+
+    # STOP  canvas x=20..165  -> rotated: raw_y ~ 20..165
+    # PAUSE canvas x=173..318 -> rotated: raw_y ~ 173..318
+    if raw_x > 185:
+        if 10 < raw_y < 170:
+            return 'stop'
+        elif 165 < raw_y < 320:
+            return 'pause'
+    return None
+
 def simulate_pour(mix_id):
-    """Run pouring: max 2 motors concurrently, 500ms staggered start for inrush."""
+    """Run pouring: max 2 motors concurrently, time-based progress."""
     mix = syrup_data[str(mix_id)]
     active_motors = [(s, mix[f"syrup_{s}"]) for s in range(1, 9) if mix[f"syrup_{s}"] > 0]
 
     if not active_motors:
         log(f"⚠️  [SIM] Mix {mix_id} is empty — no motors to drive.")
-        return
+        return {"status": "empty", "elapsed": 0, "motors": 0, "units": 0}
 
     total_motors = len(active_motors)
     total_units = sum(a for _, a in active_motors)
-    log(f"🚀 [SIM] DISPENSING Mix {mix_id} — {total_motors} motor(s), {total_units} units, max {MAX_CONCURRENT} concurrent")
+    log(f"🚀 [SIM] DISPENSING Mix {mix_id} — {total_motors} motor(s), {total_units} ml, max {MAX_CONCURRENT} concurrent")
 
+    TICK = 0.1  # 100ms poll for smooth progress
     pending = list(active_motors)       # motors waiting to start
-    running = []                        # active: [motor_id, amount, poured]
+    running = []                        # active: [motor_id, amount, start_active_time]
     finished_units = 0
     t0 = time.time()
 
+    cancelled = False
+    paused = False
+    pause_start = 0
+    total_pause_time = 0
+
     while pending or running:
+        # --- Check for stop / pause ---
+        btn = check_buttons()
+        if btn == 'stop':
+            log(f"   ❌ [SIM] STOPPED by user during Mix {mix_id} pour!")
+            cancelled = True
+            break
+        elif btn == 'pause':
+            paused = not paused
+            if paused:
+                pause_start = time.time()
+                log(f"   ⏸️  [SIM] PAUSED by user during Mix {mix_id} pour.")
+            else:
+                total_pause_time += time.time() - pause_start
+                log(f"   ▶️  [SIM] RESUMED Mix {mix_id} pour.")
+            time.sleep(0.3)  # debounce
+
+        active_time = time.time() - t0 - total_pause_time
+
+        if paused:
+            # Build display with frozen fractions
+            motor_display = []
+            for m_id, amount, m_start in running:
+                duration = amount * SECONDS_PER_UNIT
+                frac = min(1.0, (active_time - m_start) / duration)
+                motor_display.append((m_id, amount, frac))
+            running_frac = sum(a * min(1.0, (active_time - ms) / (a * SECONDS_PER_UNIT)) for _, a, ms in running)
+            draw_pouring_screen(mix_id, motor_display, total_motors,
+                                finished_units + running_frac, total_units, active_time, paused=True)
+            time.sleep(0.05)
+            continue
+
         # --- Start new motors up to MAX_CONCURRENT, with inrush stagger ---
         while pending and len(running) < MAX_CONCURRENT:
             motor_id, amount = pending.pop(0)
-            log(f"   ⚙️  Motor {motor_id}: START — {amount} units ({amount * SECONDS_PER_UNIT:.1f}s)")
-            running.append([motor_id, amount, 0])
-            # Inrush delay before starting the next motor in same batch
+            active_time = time.time() - t0 - total_pause_time
+            log(f"   ⚙️  Motor {motor_id}: START — {amount} ml ({amount * SECONDS_PER_UNIT:.1f}s)")
+            running.append([motor_id, amount, active_time])
             if pending and len(running) < MAX_CONCURRENT:
-                elapsed = time.time() - t0
-                cur = finished_units + sum(p for _, _, p in running)
-                draw_pouring_screen(mix_id, [(m, a, p) for m, a, p in running],
-                                    total_motors, cur, total_units, elapsed)
                 log(f"   ⏳ Inrush delay {int(STAGGER_DELAY*1000)}ms before next motor")
                 time.sleep(STAGGER_DELAY)
 
-        # --- Display current state ---
-        elapsed = time.time() - t0
-        cur = finished_units + sum(p for _, _, p in running)
-        draw_pouring_screen(mix_id, [(m, a, p) for m, a, p in running],
-                            total_motors, cur, total_units, elapsed)
+        active_time = time.time() - t0 - total_pause_time
 
-        # --- Wait one pour tick ---
-        time.sleep(SECONDS_PER_UNIT)
-
-        # --- Advance all running motors by 1 unit ---
+        # --- Check for completed motors ---
         still_running = []
-        for entry in running:
-            entry[2] += 1
-            if entry[2] >= entry[1]:
-                finished_units += entry[1]
-                log(f"   ✅ Motor {entry[0]}: DONE — {entry[1]} units dispensed")
+        for m_id, amount, m_start in running:
+            duration = amount * SECONDS_PER_UNIT
+            if active_time - m_start >= duration:
+                finished_units += amount
+                log(f"   ✅ Motor {m_id}: DONE — {amount} ml dispensed")
             else:
-                still_running.append(entry)
+                still_running.append([m_id, amount, m_start])
         running = still_running
 
-        # --- Refresh display after tick ---
-        elapsed = time.time() - t0
-        cur = finished_units + sum(p for _, _, p in running)
-        draw_pouring_screen(mix_id, [(m, a, p) for m, a, p in running],
-                            total_motors, cur, total_units, elapsed)
+        # --- Build display data with fractional progress ---
+        motor_display = []
+        for m_id, amount, m_start in running:
+            duration = amount * SECONDS_PER_UNIT
+            frac = min(1.0, (active_time - m_start) / duration)
+            motor_display.append((m_id, amount, frac))
+        running_frac = sum(a * min(1.0, (active_time - ms) / (a * SECONDS_PER_UNIT)) for _, a, ms in running)
+        draw_pouring_screen(mix_id, motor_display, total_motors,
+                            finished_units + running_frac, total_units, active_time)
 
-    elapsed = time.time() - t0
-    log(f"   🏁 Mix {mix_id} dispensing complete ({elapsed:.1f}s total).")
+        time.sleep(TICK)
+
+    elapsed = time.time() - t0 - total_pause_time
+    status = "stopped" if cancelled else "complete"
+    if cancelled:
+        log(f"   🛑 Mix {mix_id} pour STOPPED after {elapsed:.1f}s.")
+    else:
+        log(f"   🏁 Mix {mix_id} dispensing complete ({elapsed:.1f}s total).")
+    return {"status": status, "elapsed": elapsed, "motors": total_motors, "units": total_units}
 
 def execute_pour(mix_id):
     """Device mode: builds a staggered timeline and drives real motors."""
@@ -509,8 +615,42 @@ def execute_pour(mix_id):
     log(f"🚀 Starting staggered pour for Mix {mix_id}...")
     start_time = time.time()
 
+    cancelled = False
+    paused = False
+    pause_start = 0
+    total_pause_time = 0
     while True:
-        elapsed = time.time() - start_time
+        # --- Check for stop / pause ---
+        btn = check_buttons()
+        if btn == 'stop':
+            log(f"   ❌ STOPPED by user during Mix {mix_id} pour!")
+            cancelled = True
+            break
+        elif btn == 'pause':
+            paused = not paused
+            if paused:
+                pause_start = time.time()
+                # Stop all running motors while paused
+                for m_id, timing in schedule.items():
+                    if timing['is_running']:
+                        motors[m_id]['IN1'].value = False
+                        motors[m_id]['IN2'].value = False
+                log(f"   ⏸️  PAUSED by user during Mix {mix_id} pour.")
+            else:
+                total_pause_time += time.time() - pause_start
+                # Restart motors that were running
+                for m_id, timing in schedule.items():
+                    if timing['is_running']:
+                        motors[m_id]['IN1'].value = True
+                        motors[m_id]['IN2'].value = False
+                log(f"   ▶️  RESUMED Mix {mix_id} pour.")
+            time.sleep(0.3)  # debounce
+
+        if paused:
+            time.sleep(0.05)
+            continue
+
+        elapsed = time.time() - start_time - total_pause_time
         all_done = True
 
         for m_id, timing in schedule.items():
@@ -535,12 +675,19 @@ def execute_pour(mix_id):
 
         time.sleep(0.02)
 
-    # Safety shutoff
+    # Safety shutoff — always stop all motors
     for m_id in schedule.keys():
         motors[m_id]['IN1'].value = False
         motors[m_id]['IN2'].value = False
 
-    log(f"🏁 Pour complete! Total time: {elapsed:.2f} seconds.")
+    elapsed = time.time() - start_time - total_pause_time
+    status = "stopped" if cancelled else "complete"
+    total_units = sum(s['stop_time'] - s['start_time'] for s in schedule.values()) / SECONDS_PER_UNIT
+    if cancelled:
+        log(f"🛑 Pour STOPPED! Motors stopped after {elapsed:.2f} seconds.")
+    else:
+        log(f"🏁 Pour complete! Total time: {elapsed:.2f} seconds.")
+    return {"status": status, "elapsed": elapsed, "motors": len(schedule), "units": int(total_units)}
 
 # Boot up
 reset_grid_colors()
@@ -605,7 +752,7 @@ while True:
                 for s in range(1, 9):
                     amt = mix[f"syrup_{s}"]
                     if amt > 0:
-                        log(f"   Motor {s}: {amt} units queued")
+                        log(f"   Motor {s}: {amt} ml queued")
                 APP_STATE = "VIEW_MIX"
                 draw_view_mix(current_view_mix)
             else:
@@ -637,9 +784,18 @@ while True:
                     wait_for_release()
                     APP_STATE = "POURING"
                     if CONFIG["MODE"] == "DEVICE":
-                        execute_pour(current_view_mix)
+                        result = execute_pour(current_view_mix)
                     else:
-                        simulate_pour(current_view_mix)
+                        result = simulate_pour(current_view_mix)
+                    if result and result.get("status") != "empty":
+                        draw_summary_screen(current_view_mix, result["status"],
+                                            result["elapsed"], result["motors"], result["units"])
+                        # Wait for OK tap
+                        while True:
+                            raw = touch.get_coordinates()
+                            if raw is not None:
+                                break
+                            time.sleep(0.02)
                     APP_STATE = "MAIN_MENU"
                     reset_grid_colors()
                     draw_main_menu()
@@ -658,7 +814,7 @@ while True:
                 mix = syrup_data[str(current_edit_mix)]
                 for s in range(1, 9):
                     amt = mix[f"syrup_{s}"]
-                    status = f"{amt} units" if amt > 0 else "OFF"
+                    status = f"{amt} ml" if amt > 0 else "OFF"
                     log(f"   Motor {s}: {status}")
                 APP_STATE = "MAIN_MENU"
                 reset_grid_colors()
