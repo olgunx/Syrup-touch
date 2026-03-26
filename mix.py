@@ -1,14 +1,177 @@
 import time
-import board
-import busio
-import digitalio
 import json
 import os
+from datetime import datetime
 from PIL import Image, ImageDraw, ImageFont
-import adafruit_rgb_display.ili9341 as ili9341
-import xpt2046_circuitpython
 
-# ---------------- PERMANENT STORAGE SETUP ----------------
+def log(msg):
+    """Print a message with a timestamp prefix."""
+    ts = datetime.now().strftime("%H:%M:%S.%f")[:-3]
+    print(f"[{ts}] {msg}")
+
+# ============================================
+# CONFIGURATION - SELECT MODE HERE
+# ============================================
+CONFIG = {
+    "MODE": "SIMULATOR",  # "SIMULATOR" or "DEVICE"
+    "DISPLAY_WIDTH": 240,
+    "DISPLAY_HEIGHT": 320,
+    "TOUCH_CALIBRATION": {
+        "x_min": 10, "x_max": 4000,
+        "y_min": 10, "y_max": 4000
+    }
+}
+
+# Conditional imports based on mode
+if CONFIG["MODE"] == "DEVICE":
+    import board
+    import busio
+    import digitalio
+    import adafruit_rgb_display.ili9341 as ili9341
+    import xpt2046_circuitpython
+else:
+    try:
+        import pygame
+    except ImportError:
+        print("⚠️  pygame not found. Install with: pip install pygame")
+        print("Falling back to keyboard input only.")
+        pygame = None
+
+# ============================================
+# SIMULATOR CLASSES (for Linux PC development)
+# ============================================
+
+class SimulatorDisplay:
+    """Mock display for development on Linux PC"""
+    def __init__(self, width=240, height=320):
+        self.width = width
+        self.height = height
+        self.current_image = None
+        self.pygame = pygame
+        self.screen = None
+        
+        if pygame:
+            try:
+                pygame.init()
+                # Scale up display for better visibility on PC
+                self.scale = 2
+                # Rotated 90° CW: window is landscape (height x width)
+                self.screen = pygame.display.set_mode(
+                    (self.height * self.scale, self.width * self.scale)
+                )
+                pygame.display.set_caption("Syrup Mixer Simulator - Touch to interact")
+                self.clock = pygame.time.Clock()
+            except Exception as e:
+                print(f"⚠️  Pygame initialization failed: {e}")
+                print("   Running in headless mode (no visual display)")
+                self.pygame = None
+        
+    def image(self, img):
+        """Display an image (same interface as real display)"""
+        self.current_image = img
+        
+        if pygame and self.screen:
+            # Rotate 90° CW for landscape simulation
+            rotated = img.rotate(-90, expand=True)
+            mode = rotated.mode
+            size = rotated.size
+            data = rotated.tobytes()
+            py_image = pygame.image.fromstring(data, size, mode)
+            
+            # Scale up for visibility
+            scaled = pygame.transform.scale(
+                py_image, 
+                (self.height * self.scale, self.width * self.scale)
+            )
+            self.screen.blit(scaled, (0, 0))
+            pygame.display.flip()
+
+class SimulatorTouch:
+    """Mock touch input for development on Linux PC"""
+    def __init__(self):
+        self.pygame = pygame
+        self.last_click = None
+        self.display_width = CONFIG["DISPLAY_WIDTH"]
+        self.display_height = CONFIG["DISPLAY_HEIGHT"]
+        self.scale = 2 if pygame else 1
+        
+    def get_coordinates(self):
+        """
+        Returns touch coordinates matching device pixel range.
+        Maps mouse clicks on the rotated landscape window back to
+        the original portrait coordinate system.
+        """
+        if pygame:
+            for event in pygame.event.get():
+                if event.type == pygame.QUIT:
+                    exit(0)
+                elif event.type == pygame.MOUSEBUTTONDOWN:
+                    mouse_x, mouse_y = pygame.mouse.get_pos()
+                    
+                    # Window is rotated 90° CW, so swap axes:
+                    # touch_x (original X) = mouse_y mapped to display width
+                    # touch_y (original Y) = mouse_x mapped to display height
+                    touch_x = int(mouse_y / self.scale)
+                    touch_y = int(mouse_x / self.scale)
+                    
+                    self.last_click = (touch_x, touch_y)
+                    return (touch_x, touch_y)
+        
+        return None
+    
+    def wait_for_release_sim(self):
+        """Simulate button release for PC testing"""
+        if pygame:
+            waiting = True
+            while waiting:
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        exit(0)
+                    elif event.type == pygame.MOUSEBUTTONUP:
+                        waiting = False
+                time.sleep(0.02)
+        else:
+            # Fallback for non-pygame mode
+            time.sleep(0.3)
+
+# ============================================
+# HARDWARE INITIALIZATION
+# ============================================
+
+if CONFIG["MODE"] == "DEVICE":
+    print("🔌 Device mode - Initializing Raspberry Pi hardware...")
+    
+    spi = busio.SPI(clock=board.SCK, MOSI=board.MOSI, MISO=board.MISO)
+    
+    display = ili9341.ILI9341(
+        spi,
+        cs=digitalio.DigitalInOut(board.D8),
+        dc=digitalio.DigitalInOut(board.D24),
+        rst=digitalio.DigitalInOut(board.D25),
+        width=CONFIG["DISPLAY_WIDTH"],
+        height=CONFIG["DISPLAY_HEIGHT"],
+        baudrate=10000000
+    )
+    
+    touch_cs = digitalio.DigitalInOut(board.D7)
+    touch_irq = digitalio.DigitalInOut(board.D17)
+    touch = xpt2046_circuitpython.Touch(spi, cs=touch_cs, interrupt=touch_irq)
+    
+else:
+    print("💻 Simulator mode - Using mock display and touch input")
+    print("   Click in the window to simulate touch input")
+    display = SimulatorDisplay(
+        width=CONFIG["DISPLAY_WIDTH"],
+        height=CONFIG["DISPLAY_HEIGHT"]
+    )
+    touch = SimulatorTouch()
+
+width, height = display.width, display.height
+image = Image.new("RGB", (width, height), (0, 0, 0))
+draw = ImageDraw.Draw(image)
+
+# ============================================
+# PERMANENT STORAGE SETUP ================
 DATA_FILE = "syrup_mixes.json"
 
 def load_mixes():
@@ -29,26 +192,8 @@ syrup_data = load_mixes()
 current_edit_mix = 1 
 current_view_mix = 1 
 
-# ---------------- HARDWARE SETUP ----------------
-spi = busio.SPI(clock=board.SCK, MOSI=board.MOSI, MISO=board.MISO)
-
-display = ili9341.ILI9341(
-    spi,
-    cs=digitalio.DigitalInOut(board.D8),
-    dc=digitalio.DigitalInOut(board.D24),
-    rst=digitalio.DigitalInOut(board.D25),
-    width=240, height=320, baudrate=10000000
-)
-
-touch_cs = digitalio.DigitalInOut(board.D7)
-touch_irq = digitalio.DigitalInOut(board.D17)
-touch = xpt2046_circuitpython.Touch(spi, cs=touch_cs, interrupt=touch_irq)
-
-width, height = display.width, display.height
-image = Image.new("RGB", (width, height), (0, 0, 0))
-draw = ImageDraw.Draw(image)
-
-# ---------------- FONTS ----------------
+# ============================================
+# FONTS ============================================
 try:
     font_large = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 36)
     font_config = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 22)
@@ -99,16 +244,21 @@ def reset_grid_colors():
             grid_colors[r][c] = DEFAULT_COLOR
 
 def wait_for_release():
-    consecutive_nones = 0
-    while consecutive_nones < 4:
-        try:
-            if touch.get_coordinates() is None:
-                consecutive_nones += 1
-            else:
-                consecutive_nones = 0
-        except Exception:
-            consecutive_nones += 1 
-        time.sleep(0.02)
+    """Wait for touch to be released (device or simulator)"""
+    if CONFIG["MODE"] == "SIMULATOR":
+        touch.wait_for_release_sim()
+    else:
+        consecutive_nones = 0
+        while consecutive_nones < 4:
+            try:
+                if touch.get_coordinates() is None:
+                    consecutive_nones += 1
+                else:
+                    consecutive_nones = 0
+            except Exception:
+                consecutive_nones += 1 
+            time.sleep(0.02)
+
 
 # ---------------- UI SCREENS ----------------
 def draw_main_menu():
@@ -191,10 +341,131 @@ def draw_view_mix(mix_id, active_button=None):
     image.paste(rotated, (0, 0), rotated)
     display.image(image)
 
+SECONDS_PER_UNIT = 0.5  # simulated pour time per unit
+INRUSH_DELAY    = 0.5   # 500ms stagger between motor starts
+MAX_CONCURRENT  = 2     # max motors running at once
+
+def draw_pouring_screen(mix_id, running_motors, total_motors, overall_done, overall_total,
+                        elapsed_sec):
+    """Draw pouring progress with overall bar and up to 2 active motor bars."""
+    draw.rectangle((0, 0, width, height), fill=(0, 0, 0))
+    canvas = Image.new('RGBA', (320, 240), (0, 20, 40, 255))
+    c_draw = ImageDraw.Draw(canvas)
+
+    overall_frac = overall_done / overall_total if overall_total > 0 else 0
+
+    try:
+        # --- Title ---
+        c_draw.text((160, 16), f"POURING MIX {mix_id}", font=font_config, fill=(255, 200, 0), anchor="mm")
+
+        # --- Overall progress bar (large, top) ---
+        pct = int(overall_frac * 100)
+        c_draw.text((160, 42), f"Overall  {pct}%", font=font_config, fill=(255, 255, 255), anchor="mm")
+        ob_x, ob_y, ob_w, ob_h = 20, 58, 280, 28
+        c_draw.rectangle((ob_x, ob_y, ob_x + ob_w, ob_y + ob_h), outline=(255, 255, 255))
+        of_w = int(ob_w * overall_frac)
+        c_draw.rectangle((ob_x, ob_y, ob_x + of_w, ob_y + ob_h), fill=(0, 180, 255))
+        c_draw.text((160, ob_y + ob_h // 2), f"{overall_done}/{overall_total} units",
+                    font=font_small, fill=(255, 255, 255), anchor="mm")
+
+        # --- Time info ---
+        remaining = max(0, elapsed_sec * ((overall_total - overall_done) / max(overall_done, 1)))
+        c_draw.text((160, 100), f"Elapsed: {elapsed_sec:.1f}s    Remaining: ~{remaining:.1f}s",
+                    font=font_small, fill=(180, 180, 180), anchor="mm")
+
+        # --- Separator ---
+        c_draw.line((20, 118, 300, 118), fill=(80, 80, 80), width=1)
+
+        # --- Active motor bars (smaller, bottom) ---
+        c_draw.text((160, 130), f"Active motors ({len(running_motors)}/{total_motors} total)",
+                    font=font_small, fill=(200, 200, 200), anchor="mm")
+
+        for i, (motor_id, amount, poured) in enumerate(running_motors):
+            y_base = 150 + i * 36
+            frac = poured / amount if amount > 0 else 0
+            label = f"M{motor_id}: {poured}/{amount}"
+            c_draw.text((30, y_base + 2), label, font=font_small, fill=(200, 200, 200), anchor="lm")
+            mb_x, mb_w, mb_h = 100, 200, 14
+            c_draw.rectangle((mb_x, y_base - 5, mb_x + mb_w, y_base - 5 + mb_h), outline=(180, 180, 180))
+            mf_w = int(mb_w * frac)
+            c_draw.rectangle((mb_x, y_base - 5, mb_x + mf_w, y_base - 5 + mb_h), fill=(0, 200, 80))
+
+    except TypeError:
+        c_draw.text((20, 20), f"Pouring Mix {mix_id}  {overall_done}/{overall_total}",
+                    font=font_config, fill=(255, 255, 255))
+
+    rotated = canvas.rotate(90, expand=True)
+    image.paste(rotated, (0, 0), rotated)
+    display.image(image)
+
+def simulate_pour(mix_id):
+    """Run pouring: max 2 motors concurrently, 500ms staggered start for inrush."""
+    mix = syrup_data[str(mix_id)]
+    active_motors = [(s, mix[f"syrup_{s}"]) for s in range(1, 9) if mix[f"syrup_{s}"] > 0]
+
+    if not active_motors:
+        log(f"⚠️  [SIM] Mix {mix_id} is empty — no motors to drive.")
+        return
+
+    total_motors = len(active_motors)
+    total_units = sum(a for _, a in active_motors)
+    log(f"🚀 [SIM] DISPENSING Mix {mix_id} — {total_motors} motor(s), {total_units} units, max {MAX_CONCURRENT} concurrent")
+
+    pending = list(active_motors)       # motors waiting to start
+    running = []                        # active: [motor_id, amount, poured]
+    finished_units = 0
+    t0 = time.time()
+
+    while pending or running:
+        # --- Start new motors up to MAX_CONCURRENT, with inrush stagger ---
+        while pending and len(running) < MAX_CONCURRENT:
+            motor_id, amount = pending.pop(0)
+            log(f"   ⚙️  Motor {motor_id}: START — {amount} units ({amount * SECONDS_PER_UNIT:.1f}s)")
+            running.append([motor_id, amount, 0])
+            # Inrush delay before starting the next motor in same batch
+            if pending and len(running) < MAX_CONCURRENT:
+                elapsed = time.time() - t0
+                cur = finished_units + sum(p for _, _, p in running)
+                draw_pouring_screen(mix_id, [(m, a, p) for m, a, p in running],
+                                    total_motors, cur, total_units, elapsed)
+                log(f"   ⏳ Inrush delay {int(INRUSH_DELAY*1000)}ms before next motor")
+                time.sleep(INRUSH_DELAY)
+
+        # --- Display current state ---
+        elapsed = time.time() - t0
+        cur = finished_units + sum(p for _, _, p in running)
+        draw_pouring_screen(mix_id, [(m, a, p) for m, a, p in running],
+                            total_motors, cur, total_units, elapsed)
+
+        # --- Wait one pour tick ---
+        time.sleep(SECONDS_PER_UNIT)
+
+        # --- Advance all running motors by 1 unit ---
+        still_running = []
+        for entry in running:
+            entry[2] += 1
+            if entry[2] >= entry[1]:
+                finished_units += entry[1]
+                log(f"   ✅ Motor {entry[0]}: DONE — {entry[1]} units dispensed")
+            else:
+                still_running.append(entry)
+        running = still_running
+
+        # --- Refresh display after tick ---
+        elapsed = time.time() - t0
+        cur = finished_units + sum(p for _, _, p in running)
+        draw_pouring_screen(mix_id, [(m, a, p) for m, a, p in running],
+                            total_motors, cur, total_units, elapsed)
+
+    elapsed = time.time() - t0
+    log(f"   🏁 Mix {mix_id} dispensing complete ({elapsed:.1f}s total).")
+
 # Boot up
 reset_grid_colors()
 draw_main_menu()
 print("System Ready. Waiting for input...")
+if CONFIG["MODE"] == "SIMULATOR":
+    print("📱 Tips: Click buttons to interact | Close window to exit")
 
 # ---------------- MAIN LOOP ----------------
 while True:
@@ -247,6 +518,12 @@ while True:
                 # LONG PRESS
                 passcode_buffer.clear()
                 current_view_mix = hit_number
+                log(f"🔍 [SIM] Viewing Mix {hit_number} recipe...")
+                mix = syrup_data[str(hit_number)]
+                for s in range(1, 9):
+                    amt = mix[f"syrup_{s}"]
+                    if amt > 0:
+                        log(f"   Motor {s}: {amt} units queued")
                 APP_STATE = "VIEW_MIX"
                 draw_view_mix(current_view_mix)
             else:
@@ -276,6 +553,8 @@ while True:
                     # Visual Right side (OK button)
                     draw_view_mix(current_view_mix, active_button="OK")
                     wait_for_release()
+                    # --- MOTOR SIMULATION WITH DELAYS ---
+                    simulate_pour(current_view_mix)
                     APP_STATE = "MAIN_MENU"
                     reset_grid_colors()
                     draw_main_menu()
@@ -290,6 +569,12 @@ while True:
             wait_for_release()
             if hit_number == 9:
                 save_mixes(syrup_data)
+                log(f"💾 [SIM] Mix {current_edit_mix} saved. Motor config:")
+                mix = syrup_data[str(current_edit_mix)]
+                for s in range(1, 9):
+                    amt = mix[f"syrup_{s}"]
+                    status = f"{amt} units" if amt > 0 else "OFF"
+                    log(f"   Motor {s}: {status}")
                 APP_STATE = "MAIN_MENU"
                 reset_grid_colors()
                 draw_main_menu()
@@ -298,6 +583,7 @@ while True:
                 val += 1
                 if val > 10: val = 0
                 syrup_data[str(current_edit_mix)][f"syrup_{hit_number}"] = val
+                log(f"   ⚙️  [SIM] Motor {hit_number} set to {val} units (Mix {current_edit_mix})")
                 
                 x1, y1 = col * box_w, row * box_h
                 draw.rectangle((x1, y1, x1 + box_w, y1 + box_h), fill=(0, 255, 255))
@@ -305,6 +591,7 @@ while True:
                 time.sleep(0.05)
                 draw_edit_dashboard()
 
-    except Exception:
-        pass
+    except Exception as e:
+        if str(e):
+            log(f"❌ [SIM] Error: {e}")
     time.sleep(0.02)
