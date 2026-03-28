@@ -15,8 +15,8 @@ TFT_eSPI tft = TFT_eSPI();
 
 // Touch calibration — run the TFT_eSPI Touch_calibrate example to obtain
 // values for your specific panel, then update these five entries.
-uint16_t touchCal[5] = {300, 3600, 300, 3600, 7};
-const uint16_t TOUCH_THRESHOLD = 600;
+uint16_t touchCal[5] = {300, 3600, 300, 3600, 1};
+const uint16_t TOUCH_THRESHOLD = 20;
 
 // Interrupt-driven touch detection
 volatile bool touchPressed = false;      // Set HIGH by ISR when TIRQ goes LOW
@@ -252,25 +252,30 @@ static void resetGridColors() {
 // UI SCREENS
 // ============================================
 
+// --- Draw a single grid cell (avoids full-screen redraw) ---
+static void drawGridCell(int row, int col, uint16_t color) {
+    int x1  = col * BOX_W;
+    int y1  = row * BOX_H;
+    int num = row * 3 + col + 1;
+    int cx  = x1 + BOX_W / 2;
+    int cy  = y1 + BOX_H / 2;
+
+    tft.fillRect(x1, y1, BOX_W, BOX_H, color);
+    tft.drawRect(x1, y1, BOX_W, BOX_H, TFT_WHITE);
+    tft.fillCircle(cx, cy, 24, TFT_BLACK);
+    tft.drawCircle(cx, cy, 24, TFT_WHITE);
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextColor(TFT_WHITE);
+    tft.drawNumber(num, cx, cy, 4);
+}
+
 // --- Shared 3×3 numbered grid ---
 static void drawGrid(uint16_t cellColor, bool useGridColors) {
     tft.fillScreen(TFT_BLACK);
     for (int row = 0; row < 3; row++) {
         for (int col = 0; col < 3; col++) {
-            int x1  = col * BOX_W;
-            int y1  = row * BOX_H;
-            int num = row * 3 + col + 1;
-            int cx  = x1 + BOX_W / 2;
-            int cy  = y1 + BOX_H / 2;
-
             uint16_t color = useGridColors ? gridColors[row][col] : cellColor;
-            tft.fillRect(x1, y1, BOX_W, BOX_H, color);
-            tft.drawRect(x1, y1, BOX_W, BOX_H, TFT_WHITE);
-            tft.fillCircle(cx, cy, 24, TFT_BLACK);
-            tft.drawCircle(cx, cy, 24, TFT_WHITE);
-            tft.setTextDatum(MC_DATUM);
-            tft.setTextColor(TFT_WHITE);
-            tft.drawNumber(num, cx, cy, 4);
+            drawGridCell(row, col, color);
         }
     }
 }
@@ -308,6 +313,25 @@ static void drawEditDashboard() {
             }
         }
     }
+}
+
+// --- Redraw a single edit dashboard cell ---
+static void drawEditCell(int row, int col) {
+    int x1  = col * BOX_W;
+    int y1  = row * BOX_H;
+    int num = row * 3 + col + 1;
+    int cx  = x1 + BOX_W / 2;
+    int cy  = y1 + BOX_H / 2;
+
+    tft.fillRect(x1, y1, BOX_W, BOX_H, COL_TEAL);
+    tft.drawRect(x1, y1, BOX_W, BOX_H, TFT_WHITE);
+    tft.setTextDatum(MC_DATUM);
+    tft.setTextColor(TFT_WHITE, COL_TEAL);
+    char label[8];
+    sprintf(label, "S%d", num);
+    tft.drawString(label, cx, cy - 14, 2);
+    tft.drawNumber(syrupData[currentEditMix - 1][num - 1],
+                   cx, cy + 14, 4);
 }
 
 // --- View mix contents (with BACK / POUR buttons) ---
@@ -351,16 +375,9 @@ static void drawViewMix(int mixId, const char *activeButton = nullptr) {
     tft.drawString("POUR", 240, 202, 4);
 }
 
-// --- Pouring progress screen ---
-static void drawPouringScreen(int mixId,
-                              MotorDisplay *mDisp, int mCount,
-                              int totalMotors,
-                              float overallDone, float overallTotal,
-                              float elapsedSec, bool paused) {
+// --- Pouring progress screen: static layout (call once) ---
+static void drawPouringLayout(int mixId, int totalMotors, bool paused) {
     tft.fillScreen(COL_DARK_BLUE);
-
-    float overallFrac = (overallTotal > 0) ? overallDone / overallTotal : 0;
-    int   pct = (int)(overallFrac * 100);
 
     // Title
     tft.setTextDatum(TC_DATUM);
@@ -374,56 +391,18 @@ static void drawPouringScreen(int mixId,
     }
     tft.drawString(titleBuf, 160, 8, 2);
 
-    // Overall progress label
-    tft.setTextColor(TFT_WHITE, COL_DARK_BLUE);
-    char pctStr[24]; sprintf(pctStr, "Overall  %d%%", pct);
-    tft.drawString(pctStr, 160, 32, 2);
-
-    // Overall progress bar
+    // Overall progress bar outline
     const int barX = 20, barY = 52, barW = 280, barH = 24;
     tft.drawRect(barX, barY, barW, barH, TFT_WHITE);
-    int fillW = (int)(barW * overallFrac);
-    if (fillW > 0)
-        tft.fillRect(barX + 1, barY + 1, fillW - 1, barH - 2, COL_CYAN_BAR);
-
-    // Volume text on top of bar
-    tft.setTextDatum(MC_DATUM);
-    char volStr[24]; sprintf(volStr, "%.1f/%.0f ml", overallDone, overallTotal);
-    tft.setTextColor(TFT_WHITE);
-    tft.drawString(volStr, 160, barY + barH / 2, 1);
-
-    // Time info
-    float remaining = (overallDone > 0.01f)
-        ? elapsedSec * ((overallTotal - overallDone) / overallDone)
-        : 0;
-    if (remaining < 0) remaining = 0;
-    char timeStr[48];
-    sprintf(timeStr, "Elapsed: %.1fs  Remaining: ~%.1fs", elapsedSec, remaining);
-    tft.setTextColor(COL_LIGHT_GRAY, COL_DARK_BLUE);
-    tft.drawString(timeStr, 160, 92, 1);
 
     // Separator
     tft.drawFastHLine(20, 108, 280, COL_GRAY);
 
-    // Active motors label
-    char activeStr[32];
-    sprintf(activeStr, "Active motors (%d/%d total)", mCount, totalMotors);
-    tft.drawString(activeStr, 160, 120, 1);
-
-    // Per-motor progress bars
-    for (int i = 0; i < mCount && i < MAX_CONCURRENT; i++) {
+    // Motor bar outlines
+    for (int i = 0; i < MAX_CONCURRENT; i++) {
         int yBase = 140 + i * 24;
-        char label[16];
-        sprintf(label, "M%d: %d%%", mDisp[i].id, mDisp[i].fracPercent);
-        tft.setTextDatum(ML_DATUM);
-        tft.setTextColor(COL_LIGHT_GRAY, COL_DARK_BLUE);
-        tft.drawString(label, 20, yBase, 1);
-
         const int mbX = 100, mbW = 200, mbH = 10;
         tft.drawRect(mbX, yBase - 5, mbW, mbH, COL_LIGHT_GRAY);
-        int mfW = mbW * mDisp[i].fracPercent / 100;
-        if (mfW > 0)
-            tft.fillRect(mbX + 1, yBase - 4, mfW - 1, mbH - 2, COL_GREEN_BAR);
     }
 
     // STOP button
@@ -445,6 +424,75 @@ static void drawPouringScreen(int mixId,
         tft.drawRect(166, btnY, 138, btnH, tft.color565(255, 200, 80));
         tft.setTextColor(TFT_WHITE, COL_PAUSE);
         tft.drawString("PAUSE", 235, btnY + btnH / 2, 2);
+    }
+}
+
+// --- Pouring progress screen: update dynamic parts only ---
+static void updatePouringScreen(int mixId,
+                                MotorDisplay *mDisp, int mCount,
+                                int totalMotors,
+                                float overallDone, float overallTotal,
+                                float elapsedSec, bool paused) {
+    float overallFrac = (overallTotal > 0) ? overallDone / overallTotal : 0;
+    int   pct = (int)(overallFrac * 100);
+
+    // Overall progress label — clear region then draw
+    tft.fillRect(0, 24, 320, 22, COL_DARK_BLUE);
+    tft.setTextDatum(TC_DATUM);
+    tft.setTextColor(TFT_WHITE, COL_DARK_BLUE);
+    char pctStr[24]; sprintf(pctStr, "Overall  %d%%", pct);
+    tft.drawString(pctStr, 160, 32, 2);
+
+    // Overall progress bar fill
+    const int barX = 20, barY = 52, barW = 280, barH = 24;
+    int fillW = (int)(barW * overallFrac);
+    // Clear unfilled part, draw filled part
+    tft.fillRect(barX + 1, barY + 1, barW - 2, barH - 2, COL_DARK_BLUE);
+    if (fillW > 0)
+        tft.fillRect(barX + 1, barY + 1, fillW - 1, barH - 2, COL_CYAN_BAR);
+
+    // Volume text on top of bar
+    tft.setTextDatum(MC_DATUM);
+    char volStr[24]; sprintf(volStr, "%.1f/%.0f ml", overallDone, overallTotal);
+    tft.setTextColor(TFT_WHITE);
+    tft.drawString(volStr, 160, barY + barH / 2, 1);
+
+    // Time info — clear region then draw
+    tft.fillRect(0, 84, 320, 18, COL_DARK_BLUE);
+    float remaining = (overallDone > 0.01f)
+        ? elapsedSec * ((overallTotal - overallDone) / overallDone)
+        : 0;
+    if (remaining < 0) remaining = 0;
+    char timeStr[48];
+    sprintf(timeStr, "Elapsed: %.1fs  Remaining: ~%.1fs", elapsedSec, remaining);
+    tft.setTextColor(COL_LIGHT_GRAY, COL_DARK_BLUE);
+    tft.drawString(timeStr, 160, 92, 1);
+
+    // Active motors label — clear region then draw
+    tft.fillRect(0, 112, 320, 18, COL_DARK_BLUE);
+    char activeStr[32];
+    sprintf(activeStr, "Active motors (%d/%d total)", mCount, totalMotors);
+    tft.drawString(activeStr, 160, 120, 1);
+
+    // Per-motor progress bars — clear region then draw
+    for (int i = 0; i < MAX_CONCURRENT; i++) {
+        int yBase = 140 + i * 24;
+        const int mbX = 100, mbW = 200, mbH = 10;
+        // Clear label area and bar interior
+        tft.fillRect(0, yBase - 8, 98, 16, COL_DARK_BLUE);
+        tft.fillRect(mbX + 1, yBase - 4, mbW - 2, mbH - 2, COL_DARK_BLUE);
+
+        if (i < mCount) {
+            char label[16];
+            sprintf(label, "M%d: %d%%", mDisp[i].id, mDisp[i].fracPercent);
+            tft.setTextDatum(ML_DATUM);
+            tft.setTextColor(COL_LIGHT_GRAY, COL_DARK_BLUE);
+            tft.drawString(label, 20, yBase, 1);
+
+            int mfW = mbW * mDisp[i].fracPercent / 100;
+            if (mfW > 0)
+                tft.fillRect(mbX + 1, yBase - 4, mfW - 1, mbH - 2, COL_GREEN_BAR);
+        }
     }
 }
 
@@ -533,6 +581,12 @@ static PourResult executePour(int mixId) {
     bool          paused        = false;
     unsigned long pauseStart    = 0;
     unsigned long totalPauseMs  = 0;
+    bool          lastPaused   = false;   // track pause state for layout redraw
+    unsigned long lastDisplayUpdate = 0;
+    const unsigned long DISPLAY_UPDATE_MS = 500;  // refresh display every 500ms
+
+    // Draw the static layout once
+    drawPouringLayout(mixId, totalMotors, false);
 
     // --- Main pour loop ---
     while (nextPending < pendingCount || runningCount > 0) {
@@ -559,6 +613,9 @@ static PourResult executePour(int mixId) {
                             motorOn(running[i].id);
                         log("RESUMED");
                     }
+                    // Redraw layout for title/button change
+                    drawPouringLayout(mixId, totalMotors, paused);
+                    lastPaused = paused;
                     delay(300);   // debounce
                 }
             }
@@ -566,20 +623,23 @@ static PourResult executePour(int mixId) {
 
         float activeTime = (millis() - t0 - totalPauseMs) / 1000.0f;
 
-        // ---- Paused — only update display ----
+        // ---- Paused — only update display periodically ----
         if (paused) {
-            MotorDisplay md[MAX_CONCURRENT];
-            float runFrac = 0;
-            for (int i = 0; i < runningCount; i++) {
-                float dur  = running[i].amount * SECONDS_PER_UNIT;
-                float frac = (activeTime - running[i].startTime) / dur;
-                if (frac > 1.0f) frac = 1.0f;
-                md[i] = {running[i].id, running[i].amount, (int)(frac * 100)};
-                runFrac += running[i].amount * frac;
+            if (millis() - lastDisplayUpdate >= DISPLAY_UPDATE_MS) {
+                lastDisplayUpdate = millis();
+                MotorDisplay md[MAX_CONCURRENT];
+                float runFrac = 0;
+                for (int i = 0; i < runningCount; i++) {
+                    float dur  = running[i].amount * SECONDS_PER_UNIT;
+                    float frac = (activeTime - running[i].startTime) / dur;
+                    if (frac > 1.0f) frac = 1.0f;
+                    md[i] = {running[i].id, running[i].amount, (int)(frac * 100)};
+                    runFrac += running[i].amount * frac;
+                }
+                updatePouringScreen(mixId, md, runningCount, totalMotors,
+                                  finishedUnits + runFrac, (float)totalUnits,
+                                  activeTime, true);
             }
-            drawPouringScreen(mixId, md, runningCount, totalMotors,
-                              finishedUnits + runFrac, (float)totalUnits,
-                              activeTime, true);
             delay(50);
             continue;
         }
@@ -628,21 +688,24 @@ static PourResult executePour(int mixId) {
             }
         }
 
-        // ---- Update display ----
-        MotorDisplay md[MAX_CONCURRENT];
-        float runFrac = 0;
-        for (int i = 0; i < runningCount; i++) {
-            float dur  = running[i].amount * SECONDS_PER_UNIT;
-            float frac = (activeTime - running[i].startTime) / dur;
-            if (frac > 1.0f) frac = 1.0f;
-            md[i] = {running[i].id, running[i].amount, (int)(frac * 100)};
-            runFrac += running[i].amount * frac;
+        // ---- Update display periodically ----
+        if (millis() - lastDisplayUpdate >= DISPLAY_UPDATE_MS) {
+            lastDisplayUpdate = millis();
+            MotorDisplay md[MAX_CONCURRENT];
+            float runFrac = 0;
+            for (int i = 0; i < runningCount; i++) {
+                float dur  = running[i].amount * SECONDS_PER_UNIT;
+                float frac = (activeTime - running[i].startTime) / dur;
+                if (frac > 1.0f) frac = 1.0f;
+                md[i] = {running[i].id, running[i].amount, (int)(frac * 100)};
+                runFrac += running[i].amount * frac;
+            }
+            updatePouringScreen(mixId, md, runningCount, totalMotors,
+                              finishedUnits + runFrac, (float)totalUnits,
+                              activeTime, false);
         }
-        drawPouringScreen(mixId, md, runningCount, totalMotors,
-                          finishedUnits + runFrac, (float)totalUnits,
-                          activeTime, false);
 
-        delay(100);   // 100 ms tick
+        delay(50);   // 50 ms tick — fast touch, throttled display
     }
 
     // Safety: ensure all motors off
@@ -672,14 +735,14 @@ void setup() {
 
     // Display
     tft.init();
-    tft.setRotation(1);          // landscape 320×240
+    tft.setRotation(3);          // landscape 320×240, flipped 180°
     tft.fillScreen(TFT_BLACK);
     tft.setTouch(touchCal);
 
     // Touch interrupt pin (TIRQ = active LOW when touched)
-    pinMode(TOUCH_IRQ, INPUT_PULLUP);
-    attachInterrupt(digitalPinToInterrupt(TOUCH_IRQ), touchISR, FALLING);
-    log("Touch interrupt enabled on GPIO " + String(TOUCH_IRQ));
+    pinMode(XPT_IRQ, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(XPT_IRQ), touchISR, FALLING);
+    log("Touch interrupt enabled on GPIO " + String(XPT_IRQ));
 
     // Colours (must be after tft.init)
     initColors();
@@ -751,18 +814,16 @@ void loop() {
 
     // --------------------------------------------------
     case MAIN_MENU: {
-        // Visual highlight
-        resetGridColors();
-        gridColors[row][col] = TFT_YELLOW;
-        drawMainMenu();
+        // Visual highlight — only redraw the touched cell
+        drawGridCell(row, col, TFT_YELLOW);
 
         // Measure press duration
         unsigned long pressStart = millis();
         waitForRelease();
         unsigned long duration = millis() - pressStart;
 
-        resetGridColors();
-        drawMainMenu();
+        // Restore the touched cell
+        drawGridCell(row, col, COL_DEFAULT);
 
         if (duration >= 500) {
             // ---- Long press → view mix ----
@@ -867,12 +928,12 @@ void loop() {
             log("Motor " + String(number) + " set to " + String(val)
                 + " (Mix " + String(currentEditMix) + ")");
 
-            // Flash feedback
+            // Flash feedback then redraw just this cell
             int x1 = col * BOX_W;
             int y1 = row * BOX_H;
             tft.fillRect(x1, y1, BOX_W, BOX_H, TFT_CYAN);
             delay(50);
-            drawEditDashboard();
+            drawEditCell(row, col);
         }
         break;
     }

@@ -50,8 +50,8 @@ constexpr int   MAX_CONCURRENT   = 2;      // max motors running at once
 // ============================================
 // TOUCH PIN MAPPING
 // ============================================
-constexpr uint8_t TOUCH_CS = 16;      // SPI chip select for touch controller
-constexpr uint8_t TOUCH_IRQ = 38;     // Touch interrupt pin (active LOW)
+constexpr uint8_t XPT_CS  = 16;      // SPI chip select for touch controller
+constexpr uint8_t XPT_IRQ = 38;      // Touch interrupt pin (active LOW)
 
 // ============================================
 // PASSCODE (tap sequence to enter edit mode)
