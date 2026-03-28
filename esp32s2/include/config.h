@@ -20,9 +20,9 @@
 //   Motor 8: GPIO 17, GPIO 21
 //
 // SPI (FSPI) for display & touch:
-//   SCK=36, MOSI=35, MISO=37, LCD_CS=34, LCD_DC=33, LCD_RST=18, TOUCH_CS=16
+//   SCK=36, MOSI=35, MISO=37, LCD_CS=34, LCD_DC=33, LCD_RST=18, TOUCH_CS=16, TOUCH_IRQ=38
 //
-// Spare GPIOs: 15 (onboard LED), 38, 39, 40
+// Spare GPIOs: 15 (onboard LED), 39, 40
 
 struct MotorPins {
     uint8_t in1;
@@ -46,6 +46,12 @@ constexpr MotorPins MOTOR_PINS[8] = {
 constexpr float SECONDS_PER_UNIT = 10.0f;  // pour time per ml unit
 constexpr int   STAGGER_DELAY_MS = 500;    // inrush-current stagger between motor starts
 constexpr int   MAX_CONCURRENT   = 2;      // max motors running at once
+
+// ============================================
+// TOUCH PIN MAPPING
+// ============================================
+constexpr uint8_t TOUCH_CS = 16;      // SPI chip select for touch controller
+constexpr uint8_t TOUCH_IRQ = 38;     // Touch interrupt pin (active LOW)
 
 // ============================================
 // PASSCODE (tap sequence to enter edit mode)

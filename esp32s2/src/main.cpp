@@ -18,6 +18,22 @@ TFT_eSPI tft = TFT_eSPI();
 uint16_t touchCal[5] = {300, 3600, 300, 3600, 7};
 const uint16_t TOUCH_THRESHOLD = 600;
 
+// Interrupt-driven touch detection
+volatile bool touchPressed = false;      // Set HIGH by ISR when TIRQ goes LOW
+static unsigned long lastTouchISRTime = 0;
+const unsigned long TOUCH_ISR_DEBOUNCE_MS = 10;  // debounce time
+
+// ISR: called when TIRQ pin goes LOW (touch detected)
+static void IRAM_ATTR touchISR() {
+    unsigned long now = millis();
+    // Debounce: ignore if triggered within 10ms of last ISR
+    if (now - lastTouchISRTime < TOUCH_ISR_DEBOUNCE_MS) {
+        return;
+    }
+    lastTouchISRTime = now;
+    touchPressed = true;
+}
+
 // ============================================
 // APPLICATION STATE
 // ============================================
@@ -660,6 +676,11 @@ void setup() {
     tft.fillScreen(TFT_BLACK);
     tft.setTouch(touchCal);
 
+    // Touch interrupt pin (TIRQ = active LOW when touched)
+    pinMode(TOUCH_IRQ, INPUT_PULLUP);
+    attachInterrupt(digitalPinToInterrupt(TOUCH_IRQ), touchISR, FALLING);
+    log("Touch interrupt enabled on GPIO " + String(TOUCH_IRQ));
+
     // Colours (must be after tft.init)
     initColors();
 
@@ -700,6 +721,15 @@ void loop() {
         digitalWrite(LED_PIN, LOW);
     }
 
+    // Check if touch interrupt has triggered
+    if (!touchPressed) {
+        delay(20);
+        return;
+    }
+
+    // Clear the flag and read touch coordinates
+    touchPressed = false;
+    
     uint16_t tx, ty;
     if (!getTouch(tx, ty)) {
         delay(20);
