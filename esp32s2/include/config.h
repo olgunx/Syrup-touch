@@ -1,7 +1,7 @@
 #ifndef CONFIG_H
 #define CONFIG_H
 
-#include <Arduino.h>
+#include <cstdint>
 
 // ============================================
 // MOTOR GPIO PIN MAPPING

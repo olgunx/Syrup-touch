@@ -1,38 +1,14 @@
-// Syrup Touch Mixer — ESP32-S2 Mini C++ port
-// ILI9341 display + XPT2046 touch + 8× L9110S motor channels
-// PlatformIO / Arduino framework
+// Syrup Touch Mixer — Shared Application Logic
+// Uses hal.h for all hardware access.
+// Compiled for both ESP32-S2 (real) and native (SDL2 simulator).
 
-#include <Arduino.h>
-#include <TFT_eSPI.h>
-#include <ArduinoJson.h>
-#include <LittleFS.h>
+#include "hal.h"
 #include "config.h"
 
-// ============================================
-// DISPLAY & TOUCH
-// ============================================
-TFT_eSPI tft = TFT_eSPI();
-
-// Touch calibration — run the TFT_eSPI Touch_calibrate example to obtain
-// values for your specific panel, then update these five entries.
-uint16_t touchCal[5] = {300, 3600, 300, 3600, 1};
-const uint16_t TOUCH_THRESHOLD = 20;
-
-// Interrupt-driven touch detection
-volatile bool touchPressed = false;      // Set HIGH by ISR when TIRQ goes LOW
-static unsigned long lastTouchISRTime = 0;
-const unsigned long TOUCH_ISR_DEBOUNCE_MS = 10;  // debounce time
-
-// ISR: called when TIRQ pin goes LOW (touch detected)
-static void IRAM_ATTR touchISR() {
-    unsigned long now = millis();
-    // Debounce: ignore if triggered within 10ms of last ISR
-    if (now - lastTouchISRTime < TOUCH_ISR_DEBOUNCE_MS) {
-        return;
-    }
-    lastTouchISRTime = now;
-    touchPressed = true;
-}
+#include <cstdio>
+#include <cstring>
+#include <cstdarg>
+#include <cstdlib>
 
 // ============================================
 // APPLICATION STATE
@@ -56,9 +32,8 @@ int passcodeLen = 0;
 // ============================================
 // HEARTBEAT
 // ============================================
-const int LED_PIN = 15;           // onboard LED on S2 Mini
 unsigned long lastHeartbeat = 0;
-const unsigned long HEARTBEAT_MS = 5000;  // every 5 seconds
+const unsigned long HEARTBEAT_MS = 5000;
 unsigned long heartbeatCount = 0;
 
 // ============================================
@@ -69,37 +44,42 @@ const int SCREEN_H = 240;
 const int BOX_W = SCREEN_W / 3;  // 106
 const int BOX_H = SCREEN_H / 3;  // 80
 
-uint16_t gridColors[3][3];
+HalColor gridColors[3][3];
 
 // ============================================
-// COLOUR PALETTE (initialised in setup)
+// COLOUR PALETTE
 // ============================================
-uint16_t COL_DEFAULT, COL_PURPLE, COL_TEAL, COL_DARK_TEAL, COL_DARK_BLUE;
-uint16_t COL_DARK_RED, COL_DARK_GREEN, COL_LIGHT_RED, COL_LIGHT_GREEN, COL_RED;
-uint16_t COL_CYAN_BAR, COL_GREEN_BAR, COL_STOP, COL_PAUSE, COL_RESUME;
-uint16_t COL_OK_BTN, COL_GRAY, COL_LIGHT_GRAY, COL_TITLE_YELLOW, COL_PAUSE_TITLE;
+static HalColor COL_BLACK, COL_WHITE, COL_YELLOW, COL_CYAN;
+static HalColor COL_DEFAULT, COL_PURPLE, COL_TEAL, COL_DARK_TEAL, COL_DARK_BLUE;
+static HalColor COL_DARK_RED, COL_DARK_GREEN, COL_LIGHT_RED, COL_LIGHT_GREEN, COL_RED;
+static HalColor COL_CYAN_BAR, COL_GREEN_BAR, COL_STOP, COL_PAUSE, COL_RESUME;
+static HalColor COL_OK_BTN, COL_GRAY, COL_LIGHT_GRAY, COL_TITLE_YELLOW, COL_PAUSE_TITLE;
 
 static void initColors() {
-    COL_DEFAULT      = tft.color565(40, 40, 40);
-    COL_PURPLE       = tft.color565(80, 0, 80);
-    COL_TEAL         = tft.color565(0, 100, 150);
-    COL_DARK_TEAL    = tft.color565(0, 50, 50);
-    COL_DARK_BLUE    = tft.color565(0, 20, 40);
-    COL_DARK_RED     = tft.color565(150, 0, 0);
-    COL_DARK_GREEN   = tft.color565(0, 150, 0);
-    COL_LIGHT_RED    = tft.color565(255, 50, 50);
-    COL_LIGHT_GREEN  = tft.color565(50, 255, 50);
-    COL_RED          = tft.color565(200, 0, 0);
-    COL_CYAN_BAR     = tft.color565(0, 180, 255);
-    COL_GREEN_BAR    = tft.color565(0, 200, 80);
-    COL_STOP         = tft.color565(200, 30, 30);
-    COL_PAUSE        = tft.color565(200, 140, 0);
-    COL_RESUME       = tft.color565(30, 160, 60);
-    COL_OK_BTN       = tft.color565(0, 120, 200);
-    COL_GRAY         = tft.color565(80, 80, 80);
-    COL_LIGHT_GRAY   = tft.color565(200, 200, 200);
-    COL_TITLE_YELLOW = tft.color565(255, 200, 0);
-    COL_PAUSE_TITLE  = tft.color565(255, 160, 0);
+    COL_BLACK        = hal_color(0, 0, 0);
+    COL_WHITE        = hal_color(255, 255, 255);
+    COL_YELLOW       = hal_color(255, 255, 0);
+    COL_CYAN         = hal_color(0, 255, 255);
+    COL_DEFAULT      = hal_color(40, 40, 40);
+    COL_PURPLE       = hal_color(80, 0, 80);
+    COL_TEAL         = hal_color(0, 100, 150);
+    COL_DARK_TEAL    = hal_color(0, 50, 50);
+    COL_DARK_BLUE    = hal_color(0, 20, 40);
+    COL_DARK_RED     = hal_color(150, 0, 0);
+    COL_DARK_GREEN   = hal_color(0, 150, 0);
+    COL_LIGHT_RED    = hal_color(255, 50, 50);
+    COL_LIGHT_GREEN  = hal_color(50, 255, 50);
+    COL_RED          = hal_color(200, 0, 0);
+    COL_CYAN_BAR     = hal_color(0, 180, 255);
+    COL_GREEN_BAR    = hal_color(0, 200, 80);
+    COL_STOP         = hal_color(200, 30, 30);
+    COL_PAUSE        = hal_color(200, 140, 0);
+    COL_RESUME       = hal_color(30, 160, 60);
+    COL_OK_BTN       = hal_color(0, 120, 200);
+    COL_GRAY         = hal_color(80, 80, 80);
+    COL_LIGHT_GRAY   = hal_color(200, 200, 200);
+    COL_TITLE_YELLOW = hal_color(255, 200, 0);
+    COL_PAUSE_TITLE  = hal_color(255, 160, 0);
 }
 
 // ============================================
@@ -123,25 +103,24 @@ struct MotorDisplay {
 // ============================================
 // LOGGING
 // ============================================
-static void log(const String &msg) {
-    Serial.printf("[%lu] %s\n", millis(), msg.c_str());
+static void log(const char *msg) {
+    hal_log(msg);
+}
+
+// Helper: sprintf + log
+static void logf(const char *fmt, ...) __attribute__((format(printf, 1, 2)));
+static void logf(const char *fmt, ...) {
+    char buf[256];
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(buf, sizeof(buf), fmt, ap);
+    va_end(ap);
+    hal_log(buf);
 }
 
 // ============================================
 // TOUCH HELPERS
 // ============================================
-static bool getTouch(uint16_t &x, uint16_t &y) {
-    return tft.getTouch(&x, &y, TOUCH_THRESHOLD);
-}
-
-static void waitForRelease() {
-    uint16_t x, y;
-    while (tft.getTouch(&x, &y, TOUCH_THRESHOLD)) {
-        delay(20);
-    }
-    delay(50);
-}
-
 static bool touchInRect(uint16_t tx, uint16_t ty,
                         int rx, int ry, int rw, int rh) {
     return (int)tx >= rx && (int)tx <= rx + rw &&
@@ -149,91 +128,87 @@ static bool touchInRect(uint16_t tx, uint16_t ty,
 }
 
 // ============================================
-// MOTOR FUNCTIONS
-// ============================================
-static void initMotors() {
-    for (int i = 0; i < 8; i++) {
-        pinMode(MOTOR_PINS[i].in1, OUTPUT);
-        pinMode(MOTOR_PINS[i].in2, OUTPUT);
-        digitalWrite(MOTOR_PINS[i].in1, LOW);
-        digitalWrite(MOTOR_PINS[i].in2, LOW);
-    }
-}
-
-static void motorOn(int id) {          // id: 1-8
-    digitalWrite(MOTOR_PINS[id - 1].in1, HIGH);
-    digitalWrite(MOTOR_PINS[id - 1].in2, LOW);
-}
-
-static void motorOff(int id) {
-    digitalWrite(MOTOR_PINS[id - 1].in1, LOW);
-    digitalWrite(MOTOR_PINS[id - 1].in2, LOW);
-}
-
-static void allMotorsOff() {
-    for (int i = 1; i <= 8; i++) motorOff(i);
-}
-
-// ============================================
-// PERSISTENT STORAGE (LittleFS + JSON)
+// PERSISTENT STORAGE (HAL + manual JSON)
 // ============================================
 static const char *DATA_FILE = "/syrup_mixes.json";
 
-static void loadMixes() {
-    File file = LittleFS.open(DATA_FILE, "r");
-    if (!file) {
-        log("No data file — creating defaults");
-        memset(syrupData, 0, sizeof(syrupData));
-        // Write a default JSON so it exists on flash
-        JsonDocument doc;
-        for (int m = 1; m <= 9; m++) {
-            char mk[4]; sprintf(mk, "%d", m);
-            JsonObject mo = doc[mk].to<JsonObject>();
-            for (int s = 1; s <= 8; s++) {
-                char sk[12]; sprintf(sk, "syrup_%d", s);
-                mo[sk] = 0;
+// Minimal JSON integer extractor: finds "key": <int> in a flat JSON object.
+// NOT a general JSON parser — sufficient for our simple data format.
+static int jsonGetInt(const char *json, const char *key, int fallback) {
+    const char *p = json;
+    size_t klen = strlen(key);
+    while ((p = strstr(p, key)) != nullptr) {
+        // Verify it's a quoted key: check for '"' before key
+        if (p > json && *(p - 1) == '"') {
+            p += klen;
+            // skip '":' and whitespace
+            while (*p && (*p == '"' || *p == ':' || *p == ' ' || *p == '\t')) p++;
+            if (*p == '-' || (*p >= '0' && *p <= '9')) {
+                return (int)strtol(p, nullptr, 10);
             }
         }
-        File f = LittleFS.open(DATA_FILE, "w");
-        if (f) { serializeJson(doc, f); f.close(); }
-        return;
+        p++;
     }
+    return fallback;
+}
 
-    JsonDocument doc;
-    DeserializationError err = deserializeJson(doc, file);
-    file.close();
-
-    if (err) {
-        log("JSON parse error: " + String(err.c_str()));
+static void loadMixes() {
+    char buf[4096];
+    int n = hal_readFile(DATA_FILE, buf, sizeof(buf));
+    if (n <= 0) {
+        log("No data file — using defaults");
         memset(syrupData, 0, sizeof(syrupData));
         return;
     }
 
+    // Parse: top-level keys "1".."9", each containing "syrup_1".."syrup_8"
     for (int m = 1; m <= 9; m++) {
-        char mk[4]; sprintf(mk, "%d", m);
+        // Find the block for this mix by locating its key
+        char mixKey[8];
+        snprintf(mixKey, sizeof(mixKey), "\"%d\"", m);
+        const char *mixStart = strstr(buf, mixKey);
+        if (!mixStart) continue;
+        // Find the opening { for this mix object
+        const char *objStart = strchr(mixStart, '{');
+        if (!objStart) continue;
+        // Find the closing }
+        const char *objEnd = strchr(objStart, '}');
+        if (!objEnd) continue;
+        // Extract substring for this object
+        char objBuf[512];
+        size_t objLen = (size_t)(objEnd - objStart + 1);
+        if (objLen >= sizeof(objBuf)) objLen = sizeof(objBuf) - 1;
+        memcpy(objBuf, objStart, objLen);
+        objBuf[objLen] = '\0';
+
         for (int s = 1; s <= 8; s++) {
-            char sk[12]; sprintf(sk, "syrup_%d", s);
-            syrupData[m - 1][s - 1] = doc[mk][sk] | 0;
+            char sk[12];
+            snprintf(sk, sizeof(sk), "syrup_%d", s);
+            syrupData[m - 1][s - 1] = jsonGetInt(objBuf, sk, 0);
         }
     }
-    log("Mixes loaded from flash");
+    log("Mixes loaded");
 }
 
 static void saveMixes() {
-    JsonDocument doc;
+    char buf[4096];
+    int pos = 0;
+    pos += snprintf(buf + pos, sizeof(buf) - pos, "{\n");
     for (int m = 1; m <= 9; m++) {
-        char mk[4]; sprintf(mk, "%d", m);
-        JsonObject mo = doc[mk].to<JsonObject>();
+        pos += snprintf(buf + pos, sizeof(buf) - pos, "  \"%d\": {\n", m);
         for (int s = 1; s <= 8; s++) {
-            char sk[12]; sprintf(sk, "syrup_%d", s);
-            mo[sk] = syrupData[m - 1][s - 1];
+            pos += snprintf(buf + pos, sizeof(buf) - pos,
+                            "    \"syrup_%d\": %d%s\n",
+                            s, syrupData[m - 1][s - 1],
+                            (s < 8) ? "," : "");
         }
+        pos += snprintf(buf + pos, sizeof(buf) - pos,
+                        "  }%s\n", (m < 9) ? "," : "");
     }
-    File f = LittleFS.open(DATA_FILE, "w");
-    if (f) {
-        serializeJson(doc, f);
-        f.close();
-        log("Mixes saved to flash");
+    pos += snprintf(buf + pos, sizeof(buf) - pos, "}\n");
+
+    if (hal_writeFile(DATA_FILE, buf, pos)) {
+        log("Mixes saved");
     } else {
         log("ERROR: failed to write mixes");
     }
@@ -253,28 +228,28 @@ static void resetGridColors() {
 // ============================================
 
 // --- Draw a single grid cell (avoids full-screen redraw) ---
-static void drawGridCell(int row, int col, uint16_t color) {
+static void drawGridCell(int row, int col, HalColor color) {
     int x1  = col * BOX_W;
     int y1  = row * BOX_H;
     int num = row * 3 + col + 1;
     int cx  = x1 + BOX_W / 2;
     int cy  = y1 + BOX_H / 2;
 
-    tft.fillRect(x1, y1, BOX_W, BOX_H, color);
-    tft.drawRect(x1, y1, BOX_W, BOX_H, TFT_WHITE);
-    tft.fillCircle(cx, cy, 24, TFT_BLACK);
-    tft.drawCircle(cx, cy, 24, TFT_WHITE);
-    tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(TFT_WHITE);
-    tft.drawNumber(num, cx, cy, 4);
+    hal_fillRect(x1, y1, BOX_W, BOX_H, color);
+    hal_drawRect(x1, y1, BOX_W, BOX_H, COL_WHITE);
+    hal_fillCircle(cx, cy, 24, COL_BLACK);
+    hal_drawCircle(cx, cy, 24, COL_WHITE);
+    hal_setTextDatum(HAL_DATUM_MC);
+    hal_setTextColor(COL_WHITE);
+    hal_drawNumber(num, cx, cy, 4);
 }
 
 // --- Shared 3×3 numbered grid ---
-static void drawGrid(uint16_t cellColor, bool useGridColors) {
-    tft.fillScreen(TFT_BLACK);
+static void drawGrid(HalColor cellColor, bool useGridColors) {
+    hal_fillScreen(COL_BLACK);
     for (int row = 0; row < 3; row++) {
         for (int col = 0; col < 3; col++) {
-            uint16_t color = useGridColors ? gridColors[row][col] : cellColor;
+            HalColor color = useGridColors ? gridColors[row][col] : cellColor;
             drawGridCell(row, col, color);
         }
     }
@@ -285,7 +260,7 @@ static void drawSelectMix()  { drawGrid(COL_PURPLE,  false); }
 
 // --- Edit dashboard (syrup amounts + SAVE) ---
 static void drawEditDashboard() {
-    tft.fillScreen(TFT_BLACK);
+    hal_fillScreen(COL_BLACK);
     for (int row = 0; row < 3; row++) {
         for (int col = 0; col < 3; col++) {
             int x1  = col * BOX_W;
@@ -295,20 +270,20 @@ static void drawEditDashboard() {
             int cy  = y1 + BOX_H / 2;
 
             if (num == 9) {
-                tft.fillRect(x1, y1, BOX_W, BOX_H, COL_RED);
-                tft.drawRect(x1, y1, BOX_W, BOX_H, TFT_WHITE);
-                tft.setTextDatum(MC_DATUM);
-                tft.setTextColor(TFT_WHITE, COL_RED);
-                tft.drawString("SAVE", cx, cy, 4);
+                hal_fillRect(x1, y1, BOX_W, BOX_H, COL_RED);
+                hal_drawRect(x1, y1, BOX_W, BOX_H, COL_WHITE);
+                hal_setTextDatum(HAL_DATUM_MC);
+                hal_setTextColor(COL_WHITE, COL_RED);
+                hal_drawString("SAVE", cx, cy, 4);
             } else {
-                tft.fillRect(x1, y1, BOX_W, BOX_H, COL_TEAL);
-                tft.drawRect(x1, y1, BOX_W, BOX_H, TFT_WHITE);
-                tft.setTextDatum(MC_DATUM);
-                tft.setTextColor(TFT_WHITE, COL_TEAL);
+                hal_fillRect(x1, y1, BOX_W, BOX_H, COL_TEAL);
+                hal_drawRect(x1, y1, BOX_W, BOX_H, COL_WHITE);
+                hal_setTextDatum(HAL_DATUM_MC);
+                hal_setTextColor(COL_WHITE, COL_TEAL);
                 char label[8];
-                sprintf(label, "S%d", num);
-                tft.drawString(label, cx, cy - 14, 2);
-                tft.drawNumber(syrupData[currentEditMix - 1][num - 1],
+                snprintf(label, sizeof(label), "S%d", num);
+                hal_drawString(label, cx, cy - 14, 2);
+                hal_drawNumber(syrupData[currentEditMix - 1][num - 1],
                                cx, cy + 14, 4);
             }
         }
@@ -323,107 +298,107 @@ static void drawEditCell(int row, int col) {
     int cx  = x1 + BOX_W / 2;
     int cy  = y1 + BOX_H / 2;
 
-    tft.fillRect(x1, y1, BOX_W, BOX_H, COL_TEAL);
-    tft.drawRect(x1, y1, BOX_W, BOX_H, TFT_WHITE);
-    tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(TFT_WHITE, COL_TEAL);
+    hal_fillRect(x1, y1, BOX_W, BOX_H, COL_TEAL);
+    hal_drawRect(x1, y1, BOX_W, BOX_H, COL_WHITE);
+    hal_setTextDatum(HAL_DATUM_MC);
+    hal_setTextColor(COL_WHITE, COL_TEAL);
     char label[8];
-    sprintf(label, "S%d", num);
-    tft.drawString(label, cx, cy - 14, 2);
-    tft.drawNumber(syrupData[currentEditMix - 1][num - 1],
+    snprintf(label, sizeof(label), "S%d", num);
+    hal_drawString(label, cx, cy - 14, 2);
+    hal_drawNumber(syrupData[currentEditMix - 1][num - 1],
                    cx, cy + 14, 4);
 }
 
 // --- View mix contents (with BACK / POUR buttons) ---
 static void drawViewMix(int mixId, const char *activeButton = nullptr) {
-    tft.fillScreen(COL_DARK_TEAL);
+    hal_fillScreen(COL_DARK_TEAL);
 
     // Title
-    tft.setTextDatum(TC_DATUM);
-    tft.setTextColor(TFT_YELLOW, COL_DARK_TEAL);
+    hal_setTextDatum(HAL_DATUM_TC);
+    hal_setTextColor(COL_YELLOW, COL_DARK_TEAL);
     char title[32];
-    sprintf(title, "--- MIX %d CONTENTS ---", mixId);
-    tft.drawString(title, 160, 10, 2);
+    snprintf(title, sizeof(title), "--- MIX %d CONTENTS ---", mixId);
+    hal_drawString(title, 160, 10, 2);
 
     // Syrup values — two columns
-    tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(TFT_WHITE, COL_DARK_TEAL);
+    hal_setTextDatum(HAL_DATUM_MC);
+    hal_setTextColor(COL_WHITE, COL_DARK_TEAL);
     for (int i = 0; i < 4; i++) {
         int y = 55 + i * 28;
         char left[20], right[20];
-        sprintf(left,  "Syrup %d:  %d", i + 1, syrupData[mixId - 1][i]);
-        sprintf(right, "Syrup %d:  %d", i + 5, syrupData[mixId - 1][i + 4]);
-        tft.drawString(left,  80,  y, 2);
-        tft.drawString(right, 240, y, 2);
+        snprintf(left,  sizeof(left),  "Syrup %d:  %d", i + 1, syrupData[mixId - 1][i]);
+        snprintf(right, sizeof(right), "Syrup %d:  %d", i + 5, syrupData[mixId - 1][i + 4]);
+        hal_drawString(left,  80,  y, 2);
+        hal_drawString(right, 240, y, 2);
     }
 
     // BACK button
-    uint16_t backCol = (activeButton && strcmp(activeButton, "BACK") == 0)
+    HalColor backCol = (activeButton && strcmp(activeButton, "BACK") == 0)
                        ? COL_LIGHT_RED : COL_DARK_RED;
-    tft.fillRect(10, 180, 140, 45, backCol);
-    tft.drawRect(10, 180, 140, 45, TFT_WHITE);
-    tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(TFT_WHITE, backCol);
-    tft.drawString("BACK", 80, 202, 4);
+    hal_fillRect(10, 180, 140, 45, backCol);
+    hal_drawRect(10, 180, 140, 45, COL_WHITE);
+    hal_setTextDatum(HAL_DATUM_MC);
+    hal_setTextColor(COL_WHITE, backCol);
+    hal_drawString("BACK", 80, 202, 4);
 
     // POUR button
-    uint16_t pourCol = (activeButton && strcmp(activeButton, "POUR") == 0)
+    HalColor pourCol = (activeButton && strcmp(activeButton, "POUR") == 0)
                        ? COL_LIGHT_GREEN : COL_DARK_GREEN;
-    tft.fillRect(170, 180, 140, 45, pourCol);
-    tft.drawRect(170, 180, 140, 45, TFT_WHITE);
-    tft.setTextColor(TFT_WHITE, pourCol);
-    tft.drawString("POUR", 240, 202, 4);
+    hal_fillRect(170, 180, 140, 45, pourCol);
+    hal_drawRect(170, 180, 140, 45, COL_WHITE);
+    hal_setTextColor(COL_WHITE, pourCol);
+    hal_drawString("POUR", 240, 202, 4);
 }
 
 // --- Pouring progress screen: static layout (call once) ---
 static void drawPouringLayout(int mixId, int totalMotors, bool paused) {
-    tft.fillScreen(COL_DARK_BLUE);
+    hal_fillScreen(COL_DARK_BLUE);
 
     // Title
-    tft.setTextDatum(TC_DATUM);
+    hal_setTextDatum(HAL_DATUM_TC);
     char titleBuf[24];
     if (paused) {
-        sprintf(titleBuf, "PAUSED MIX %d", mixId);
-        tft.setTextColor(COL_PAUSE_TITLE, COL_DARK_BLUE);
+        snprintf(titleBuf, sizeof(titleBuf), "PAUSED MIX %d", mixId);
+        hal_setTextColor(COL_PAUSE_TITLE, COL_DARK_BLUE);
     } else {
-        sprintf(titleBuf, "POURING MIX %d", mixId);
-        tft.setTextColor(COL_TITLE_YELLOW, COL_DARK_BLUE);
+        snprintf(titleBuf, sizeof(titleBuf), "POURING MIX %d", mixId);
+        hal_setTextColor(COL_TITLE_YELLOW, COL_DARK_BLUE);
     }
-    tft.drawString(titleBuf, 160, 8, 2);
+    hal_drawString(titleBuf, 160, 8, 2);
 
     // Overall progress bar outline
     const int barX = 20, barY = 52, barW = 280, barH = 24;
-    tft.drawRect(barX, barY, barW, barH, TFT_WHITE);
+    hal_drawRect(barX, barY, barW, barH, COL_WHITE);
 
     // Separator
-    tft.drawFastHLine(20, 108, 280, COL_GRAY);
+    hal_drawHLine(20, 108, 280, COL_GRAY);
 
     // Motor bar outlines
     for (int i = 0; i < MAX_CONCURRENT; i++) {
         int yBase = 140 + i * 24;
         const int mbX = 100, mbW = 200, mbH = 10;
-        tft.drawRect(mbX, yBase - 5, mbW, mbH, COL_LIGHT_GRAY);
+        hal_drawRect(mbX, yBase - 5, mbW, mbH, COL_LIGHT_GRAY);
     }
 
     // STOP button
     const int btnY = 200, btnH = 36;
-    tft.fillRect(20, btnY, 138, btnH, COL_STOP);
-    tft.drawRect(20, btnY, 138, btnH, tft.color565(255, 100, 100));
-    tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(TFT_WHITE, COL_STOP);
-    tft.drawString("STOP", 89, btnY + btnH / 2, 2);
+    hal_fillRect(20, btnY, 138, btnH, COL_STOP);
+    hal_drawRect(20, btnY, 138, btnH, hal_color(255, 100, 100));
+    hal_setTextDatum(HAL_DATUM_MC);
+    hal_setTextColor(COL_WHITE, COL_STOP);
+    hal_drawString("STOP", 89, btnY + btnH / 2, 2);
 
     // PAUSE / RESUME button
     if (paused) {
-        tft.fillRect(166, btnY, 138, btnH, COL_RESUME);
-        tft.drawRect(166, btnY, 138, btnH, tft.color565(100, 220, 100));
-        tft.setTextColor(TFT_WHITE, COL_RESUME);
-        tft.drawString("RESUME", 235, btnY + btnH / 2, 2);
+        hal_fillRect(166, btnY, 138, btnH, COL_RESUME);
+        hal_drawRect(166, btnY, 138, btnH, hal_color(100, 220, 100));
+        hal_setTextColor(COL_WHITE, COL_RESUME);
+        hal_drawString("RESUME", 235, btnY + btnH / 2, 2);
     } else {
-        tft.fillRect(166, btnY, 138, btnH, COL_PAUSE);
-        tft.drawRect(166, btnY, 138, btnH, tft.color565(255, 200, 80));
-        tft.setTextColor(TFT_WHITE, COL_PAUSE);
-        tft.drawString("PAUSE", 235, btnY + btnH / 2, 2);
+        hal_fillRect(166, btnY, 138, btnH, COL_PAUSE);
+        hal_drawRect(166, btnY, 138, btnH, hal_color(255, 200, 80));
+        hal_setTextColor(COL_WHITE, COL_PAUSE);
+        hal_drawString("PAUSE", 235, btnY + btnH / 2, 2);
     }
 }
 
@@ -436,62 +411,60 @@ static void updatePouringScreen(int mixId,
     float overallFrac = (overallTotal > 0) ? overallDone / overallTotal : 0;
     int   pct = (int)(overallFrac * 100);
 
-    // Overall progress label — clear region then draw
-    tft.fillRect(0, 24, 320, 22, COL_DARK_BLUE);
-    tft.setTextDatum(TC_DATUM);
-    tft.setTextColor(TFT_WHITE, COL_DARK_BLUE);
-    char pctStr[24]; sprintf(pctStr, "Overall  %d%%", pct);
-    tft.drawString(pctStr, 160, 32, 2);
+    // Overall progress label
+    hal_fillRect(0, 24, 320, 22, COL_DARK_BLUE);
+    hal_setTextDatum(HAL_DATUM_TC);
+    hal_setTextColor(COL_WHITE, COL_DARK_BLUE);
+    char pctStr[24]; snprintf(pctStr, sizeof(pctStr), "Overall  %d%%", pct);
+    hal_drawString(pctStr, 160, 32, 2);
 
     // Overall progress bar fill
     const int barX = 20, barY = 52, barW = 280, barH = 24;
     int fillW = (int)(barW * overallFrac);
-    // Clear unfilled part, draw filled part
-    tft.fillRect(barX + 1, barY + 1, barW - 2, barH - 2, COL_DARK_BLUE);
+    hal_fillRect(barX + 1, barY + 1, barW - 2, barH - 2, COL_DARK_BLUE);
     if (fillW > 0)
-        tft.fillRect(barX + 1, barY + 1, fillW - 1, barH - 2, COL_CYAN_BAR);
+        hal_fillRect(barX + 1, barY + 1, fillW - 1, barH - 2, COL_CYAN_BAR);
 
-    // Volume text on top of bar
-    tft.setTextDatum(MC_DATUM);
-    char volStr[24]; sprintf(volStr, "%.1f/%.0f ml", overallDone, overallTotal);
-    tft.setTextColor(TFT_WHITE);
-    tft.drawString(volStr, 160, barY + barH / 2, 1);
+    // Volume text
+    hal_setTextDatum(HAL_DATUM_MC);
+    char volStr[24]; snprintf(volStr, sizeof(volStr), "%.1f/%.0f ml", overallDone, overallTotal);
+    hal_setTextColor(COL_WHITE);
+    hal_drawString(volStr, 160, barY + barH / 2, 1);
 
-    // Time info — clear region then draw
-    tft.fillRect(0, 84, 320, 18, COL_DARK_BLUE);
+    // Time info
+    hal_fillRect(0, 84, 320, 18, COL_DARK_BLUE);
     float remaining = (overallDone > 0.01f)
         ? elapsedSec * ((overallTotal - overallDone) / overallDone)
         : 0;
     if (remaining < 0) remaining = 0;
     char timeStr[48];
-    sprintf(timeStr, "Elapsed: %.1fs  Remaining: ~%.1fs", elapsedSec, remaining);
-    tft.setTextColor(COL_LIGHT_GRAY, COL_DARK_BLUE);
-    tft.drawString(timeStr, 160, 92, 1);
+    snprintf(timeStr, sizeof(timeStr), "Elapsed: %.1fs  Remaining: ~%.1fs", elapsedSec, remaining);
+    hal_setTextColor(COL_LIGHT_GRAY, COL_DARK_BLUE);
+    hal_drawString(timeStr, 160, 92, 1);
 
-    // Active motors label — clear region then draw
-    tft.fillRect(0, 112, 320, 18, COL_DARK_BLUE);
+    // Active motors label
+    hal_fillRect(0, 112, 320, 18, COL_DARK_BLUE);
     char activeStr[32];
-    sprintf(activeStr, "Active motors (%d/%d total)", mCount, totalMotors);
-    tft.drawString(activeStr, 160, 120, 1);
+    snprintf(activeStr, sizeof(activeStr), "Active motors (%d/%d total)", mCount, totalMotors);
+    hal_drawString(activeStr, 160, 120, 1);
 
-    // Per-motor progress bars — clear region then draw
+    // Per-motor progress bars
     for (int i = 0; i < MAX_CONCURRENT; i++) {
         int yBase = 140 + i * 24;
         const int mbX = 100, mbW = 200, mbH = 10;
-        // Clear label area and bar interior
-        tft.fillRect(0, yBase - 8, 98, 16, COL_DARK_BLUE);
-        tft.fillRect(mbX + 1, yBase - 4, mbW - 2, mbH - 2, COL_DARK_BLUE);
+        hal_fillRect(0, yBase - 8, 98, 16, COL_DARK_BLUE);
+        hal_fillRect(mbX + 1, yBase - 4, mbW - 2, mbH - 2, COL_DARK_BLUE);
 
         if (i < mCount) {
             char label[16];
-            sprintf(label, "M%d: %d%%", mDisp[i].id, mDisp[i].fracPercent);
-            tft.setTextDatum(ML_DATUM);
-            tft.setTextColor(COL_LIGHT_GRAY, COL_DARK_BLUE);
-            tft.drawString(label, 20, yBase, 1);
+            snprintf(label, sizeof(label), "M%d: %d%%", mDisp[i].id, mDisp[i].fracPercent);
+            hal_setTextDatum(HAL_DATUM_ML);
+            hal_setTextColor(COL_LIGHT_GRAY, COL_DARK_BLUE);
+            hal_drawString(label, 20, yBase, 1);
 
             int mfW = mbW * mDisp[i].fracPercent / 100;
             if (mfW > 0)
-                tft.fillRect(mbX + 1, yBase - 4, mfW - 1, mbH - 2, COL_GREEN_BAR);
+                hal_fillRect(mbX + 1, yBase - 4, mfW - 1, mbH - 2, COL_GREEN_BAR);
         }
     }
 }
@@ -499,39 +472,39 @@ static void updatePouringScreen(int mixId,
 // --- Summary screen (after pour completes or is stopped) ---
 static void drawSummaryScreen(int mixId, PourStatus status,
                               float elapsed, int motorsUsed, int totalUnits) {
-    tft.fillScreen(COL_DARK_BLUE);
+    hal_fillScreen(COL_DARK_BLUE);
 
-    tft.setTextDatum(TC_DATUM);
+    hal_setTextDatum(HAL_DATUM_TC);
     if (status == POUR_COMPLETE) {
-        tft.setTextColor(tft.color565(0, 220, 80), COL_DARK_BLUE);
-        tft.drawString("POUR COMPLETE", 160, 22, 4);
+        hal_setTextColor(hal_color(0, 220, 80), COL_DARK_BLUE);
+        hal_drawString("POUR COMPLETE", 160, 22, 4);
     } else {
-        tft.setTextColor(tft.color565(220, 60, 60), COL_DARK_BLUE);
-        tft.drawString("POUR STOPPED", 160, 22, 4);
+        hal_setTextColor(hal_color(220, 60, 60), COL_DARK_BLUE);
+        hal_drawString("POUR STOPPED", 160, 22, 4);
     }
 
-    tft.drawFastHLine(40, 55, 240, COL_GRAY);
+    hal_drawHLine(40, 55, 240, COL_GRAY);
 
-    tft.setTextDatum(MC_DATUM);
+    hal_setTextDatum(HAL_DATUM_MC);
     char buf[32];
-    tft.setTextColor(TFT_WHITE, COL_DARK_BLUE);
-    sprintf(buf, "Mix %d", mixId);
-    tft.drawString(buf, 160, 80, 2);
+    hal_setTextColor(COL_WHITE, COL_DARK_BLUE);
+    snprintf(buf, sizeof(buf), "Mix %d", mixId);
+    hal_drawString(buf, 160, 80, 2);
 
-    tft.setTextColor(COL_LIGHT_GRAY, COL_DARK_BLUE);
-    sprintf(buf, "Time: %.1fs", elapsed);
-    tft.drawString(buf, 160, 110, 2);
-    sprintf(buf, "Motors: %d", motorsUsed);
-    tft.drawString(buf, 160, 140, 2);
-    sprintf(buf, "Volume: %d ml", totalUnits);
-    tft.drawString(buf, 160, 170, 2);
+    hal_setTextColor(COL_LIGHT_GRAY, COL_DARK_BLUE);
+    snprintf(buf, sizeof(buf), "Time: %.1fs", elapsed);
+    hal_drawString(buf, 160, 110, 2);
+    snprintf(buf, sizeof(buf), "Motors: %d", motorsUsed);
+    hal_drawString(buf, 160, 140, 2);
+    snprintf(buf, sizeof(buf), "Volume: %d ml", totalUnits);
+    hal_drawString(buf, 160, 170, 2);
 
     // OK button
-    tft.fillRect(110, 195, 100, 38, COL_OK_BTN);
-    tft.drawRect(110, 195, 100, 38, tft.color565(100, 180, 255));
-    tft.setTextDatum(MC_DATUM);
-    tft.setTextColor(TFT_WHITE, COL_OK_BTN);
-    tft.drawString("OK", 160, 214, 4);
+    hal_fillRect(110, 195, 100, 38, COL_OK_BTN);
+    hal_drawRect(110, 195, 100, 38, hal_color(100, 180, 255));
+    hal_setTextDatum(HAL_DATUM_MC);
+    hal_setTextColor(COL_WHITE, COL_OK_BTN);
+    hal_drawString("OK", 160, 214, 4);
 }
 
 // ============================================
@@ -557,7 +530,7 @@ static PourResult executePour(int mixId) {
     }
 
     if (pendingCount == 0) {
-        log("Mix " + String(mixId) + " is empty");
+        logf("Mix %d is empty", mixId);
         return {POUR_EMPTY, 0, 0, 0};
     }
 
@@ -565,10 +538,8 @@ static PourResult executePour(int mixId) {
     int totalUnits  = 0;
     for (int i = 0; i < pendingCount; i++) totalUnits += pending[i].amount;
 
-    log("DISPENSING Mix " + String(mixId) + " — "
-        + String(totalMotors) + " motors, "
-        + String(totalUnits)  + " ml, max "
-        + String(MAX_CONCURRENT) + " concurrent");
+    logf("DISPENSING Mix %d — %d motors, %d ml, max %d concurrent",
+         mixId, totalMotors, totalUnits, MAX_CONCURRENT);
 
     // --- Runtime state ---
     RunningMotor running[MAX_CONCURRENT];
@@ -576,24 +547,23 @@ static PourResult executePour(int mixId) {
     int   nextPending   = 0;
     float finishedUnits = 0;
 
-    unsigned long t0            = millis();
+    unsigned long t0            = hal_millis();
     bool          cancelled     = false;
     bool          paused        = false;
     unsigned long pauseStart    = 0;
     unsigned long totalPauseMs  = 0;
-    bool          lastPaused   = false;   // track pause state for layout redraw
     unsigned long lastDisplayUpdate = 0;
-    const unsigned long DISPLAY_UPDATE_MS = 500;  // refresh display every 500ms
+    const unsigned long DISPLAY_UPDATE_MS = 500;
 
     // Draw the static layout once
     drawPouringLayout(mixId, totalMotors, false);
 
     // --- Main pour loop ---
-    while (nextPending < pendingCount || runningCount > 0) {
+    while ((nextPending < pendingCount || runningCount > 0) && !hal_shouldQuit()) {
 
         // ---- Check touch for STOP / PAUSE ----
         uint16_t tx, ty;
-        if (getTouch(tx, ty)) {
+        if (hal_getTouch(tx, ty)) {
             if (ty >= 200 && ty <= 236) {
                 if (tx >= 20 && tx <= 158) {
                     log("STOPPED by user");
@@ -603,30 +573,28 @@ static PourResult executePour(int mixId) {
                 if (tx >= 166 && tx <= 304) {
                     paused = !paused;
                     if (paused) {
-                        pauseStart = millis();
+                        pauseStart = hal_millis();
                         for (int i = 0; i < runningCount; i++)
-                            motorOff(running[i].id);
+                            hal_motorOff(running[i].id);
                         log("PAUSED");
                     } else {
-                        totalPauseMs += millis() - pauseStart;
+                        totalPauseMs += hal_millis() - pauseStart;
                         for (int i = 0; i < runningCount; i++)
-                            motorOn(running[i].id);
+                            hal_motorOn(running[i].id);
                         log("RESUMED");
                     }
-                    // Redraw layout for title/button change
                     drawPouringLayout(mixId, totalMotors, paused);
-                    lastPaused = paused;
-                    delay(300);   // debounce
+                    hal_delay(300);   // debounce
                 }
             }
         }
 
-        float activeTime = (millis() - t0 - totalPauseMs) / 1000.0f;
+        float activeTime = (hal_millis() - t0 - totalPauseMs) / 1000.0f;
 
         // ---- Paused — only update display periodically ----
         if (paused) {
-            if (millis() - lastDisplayUpdate >= DISPLAY_UPDATE_MS) {
-                lastDisplayUpdate = millis();
+            if (hal_millis() - lastDisplayUpdate >= DISPLAY_UPDATE_MS) {
+                lastDisplayUpdate = hal_millis();
                 MotorDisplay md[MAX_CONCURRENT];
                 float runFrac = 0;
                 for (int i = 0; i < runningCount; i++) {
@@ -640,57 +608,55 @@ static PourResult executePour(int mixId) {
                                   finishedUnits + runFrac, (float)totalUnits,
                                   activeTime, true);
             }
-            delay(50);
+            hal_delay(50);
             continue;
         }
 
         // ---- Start new motors up to MAX_CONCURRENT ----
         while (nextPending < pendingCount && runningCount < MAX_CONCURRENT) {
-            activeTime = (millis() - t0 - totalPauseMs) / 1000.0f;
+            activeTime = (hal_millis() - t0 - totalPauseMs) / 1000.0f;
             int mId  = pending[nextPending].id;
             int mAmt = pending[nextPending].amount;
             running[runningCount++] = {mId, mAmt, activeTime};
-            motorOn(mId);
-            log("Motor " + String(mId) + ": START — "
-                + String(mAmt) + " ml ("
-                + String(mAmt * SECONDS_PER_UNIT, 1) + "s)");
+            hal_motorOn(mId);
+            logf("Motor %d: START — %d ml (%.1fs)",
+                 mId, mAmt, mAmt * SECONDS_PER_UNIT);
             nextPending++;
 
             // Inrush-current stagger (with stop-button polling)
             if (nextPending < pendingCount && runningCount < MAX_CONCURRENT) {
-                log("Inrush stagger " + String(STAGGER_DELAY_MS) + "ms");
-                unsigned long staggerEnd = millis() + STAGGER_DELAY_MS;
-                while (millis() < staggerEnd) {
+                logf("Inrush stagger %dms", STAGGER_DELAY_MS);
+                unsigned long staggerEnd = hal_millis() + STAGGER_DELAY_MS;
+                while (hal_millis() < staggerEnd && !hal_shouldQuit()) {
                     uint16_t bx, by;
-                    if (getTouch(bx, by) && by >= 200
+                    if (hal_getTouch(bx, by) && by >= 200
                         && bx >= 20 && bx <= 158) {
                         cancelled = true;
                         break;
                     }
-                    delay(20);
+                    hal_delay(20);
                 }
                 if (cancelled) break;
             }
         }
         if (cancelled) break;
 
-        activeTime = (millis() - t0 - totalPauseMs) / 1000.0f;
+        activeTime = (hal_millis() - t0 - totalPauseMs) / 1000.0f;
 
         // ---- Check for completed motors ----
         for (int i = runningCount - 1; i >= 0; i--) {
             float dur = running[i].amount * SECONDS_PER_UNIT;
             if (activeTime - running[i].startTime >= dur) {
-                motorOff(running[i].id);
+                hal_motorOff(running[i].id);
                 finishedUnits += running[i].amount;
-                log("Motor " + String(running[i].id)
-                    + ": DONE — " + String(running[i].amount) + " ml");
+                logf("Motor %d: DONE — %d ml", running[i].id, running[i].amount);
                 running[i] = running[--runningCount];   // swap-remove
             }
         }
 
         // ---- Update display periodically ----
-        if (millis() - lastDisplayUpdate >= DISPLAY_UPDATE_MS) {
-            lastDisplayUpdate = millis();
+        if (hal_millis() - lastDisplayUpdate >= DISPLAY_UPDATE_MS) {
+            lastDisplayUpdate = hal_millis();
             MotorDisplay md[MAX_CONCURRENT];
             float runFrac = 0;
             for (int i = 0; i < runningCount; i++) {
@@ -705,59 +671,30 @@ static PourResult executePour(int mixId) {
                               activeTime, false);
         }
 
-        delay(50);   // 50 ms tick — fast touch, throttled display
+        hal_delay(50);
     }
 
     // Safety: ensure all motors off
-    allMotorsOff();
+    hal_allMotorsOff();
 
-    float elapsed = (millis() - t0 - totalPauseMs) / 1000.0f;
+    float elapsed = (hal_millis() - t0 - totalPauseMs) / 1000.0f;
     PourStatus st = cancelled ? POUR_STOPPED : POUR_COMPLETE;
     if (cancelled)
-        log("Pour STOPPED after " + String(elapsed, 1) + "s");
+        logf("Pour STOPPED after %.1fs", elapsed);
     else
-        log("Pour COMPLETE in " + String(elapsed, 1) + "s");
+        logf("Pour COMPLETE in %.1fs", elapsed);
 
     return {st, elapsed, totalMotors, totalUnits};
 }
 
 // ============================================
-// SETUP
+// APP SETUP (called by HAL after hardware init)
 // ============================================
-void setup() {
-    Serial.begin(115200);
-    // Wait for USB CDC connection (up to 3s)
-    unsigned long serialWait = millis();
-    while (!Serial && (millis() - serialWait < 3000)) {
-        delay(10);
-    }
-    Serial.println("\n=== Syrup Touch Mixer (ESP32-S2 Mini) ===");
+void app_setup() {
+    hal_log("=== Syrup Touch Mixer ===");
 
-    // Display
-    tft.init();
-    tft.setRotation(3);          // landscape 320×240, flipped 180°
-    tft.fillScreen(TFT_BLACK);
-    tft.setTouch(touchCal);
-
-    // Touch interrupt pin (TIRQ = active LOW when touched)
-    pinMode(XPT_IRQ, INPUT_PULLUP);
-    attachInterrupt(digitalPinToInterrupt(XPT_IRQ), touchISR, FALLING);
-    log("Touch interrupt enabled on GPIO " + String(XPT_IRQ));
-
-    // Colours (must be after tft.init)
+    // Colours
     initColors();
-
-    // Filesystem
-    if (!LittleFS.begin(true)) {
-        Serial.println("LittleFS mount failed!");
-    }
-
-    // Heartbeat LED
-    pinMode(LED_PIN, OUTPUT);
-    digitalWrite(LED_PIN, LOW);
-
-    // Motors
-    initMotors();
 
     // Mix data
     loadMixes();
@@ -766,42 +703,36 @@ void setup() {
     resetGridColors();
     drawMainMenu();
 
-    Serial.println("System Ready. Waiting for input...");
+    hal_log("System Ready. Waiting for input...");
 }
 
 // ============================================
-// MAIN LOOP — state machine
+// APP LOOP — state machine (called repeatedly by HAL)
 // ============================================
-void loop() {
-    // --- Heartbeat: blink LED + serial print every 5s ---
-    if (millis() - lastHeartbeat >= HEARTBEAT_MS) {
-        lastHeartbeat = millis();
+void app_loop() {
+    if (hal_shouldQuit()) return;
+
+    // --- Heartbeat ---
+    if (hal_millis() - lastHeartbeat >= HEARTBEAT_MS) {
+        lastHeartbeat = hal_millis();
         heartbeatCount++;
-        digitalWrite(LED_PIN, HIGH);
-        Serial.printf("[%lu] ALIVE #%lu | state=%d | uptime=%lus\n",
-                      millis(), heartbeatCount, (int)appState, millis() / 1000);
-        delay(50);
-        digitalWrite(LED_PIN, LOW);
+        hal_ledOn();
+        logf("ALIVE #%lu | state=%d | uptime=%lus",
+             heartbeatCount, (int)appState, hal_millis() / 1000);
+        hal_delay(50);
+        hal_ledOff();
     }
 
-    // Check if touch interrupt has triggered
-    if (!touchPressed) {
-        delay(20);
-        return;
-    }
-
-    // Clear the flag and read touch coordinates
-    touchPressed = false;
-    
+    // --- Check for touch ---
     uint16_t tx, ty;
-    if (!getTouch(tx, ty)) {
-        delay(20);
+    if (!hal_getTouch(tx, ty)) {
+        hal_delay(20);
         return;
     }
 
-    // Bounds check (guard against bad calibration)
+    // Bounds check
     if (tx >= SCREEN_W || ty >= SCREEN_H) {
-        delay(20);
+        hal_delay(20);
         return;
     }
 
@@ -815,12 +746,12 @@ void loop() {
     // --------------------------------------------------
     case MAIN_MENU: {
         // Visual highlight — only redraw the touched cell
-        drawGridCell(row, col, TFT_YELLOW);
+        drawGridCell(row, col, COL_YELLOW);
 
         // Measure press duration
-        unsigned long pressStart = millis();
-        waitForRelease();
-        unsigned long duration = millis() - pressStart;
+        unsigned long pressStart = hal_millis();
+        hal_waitForRelease();
+        unsigned long duration = hal_millis() - pressStart;
 
         // Restore the touched cell
         drawGridCell(row, col, COL_DEFAULT);
@@ -829,11 +760,11 @@ void loop() {
             // ---- Long press → view mix ----
             passcodeLen = 0;
             currentViewMix = number;
-            log("Viewing Mix " + String(number));
+            logf("Viewing Mix %d", number);
             for (int s = 0; s < 8; s++) {
                 int amt = syrupData[number - 1][s];
                 if (amt > 0)
-                    log("  Motor " + String(s + 1) + ": " + String(amt) + " ml");
+                    logf("  Motor %d: %d ml", s + 1, amt);
             }
             appState = VIEW_MIX;
             drawViewMix(currentViewMix);
@@ -853,7 +784,7 @@ void loop() {
                 passcodeBuffer[1] == SECRET_CODE[1] &&
                 passcodeBuffer[2] == SECRET_CODE[2] &&
                 passcodeBuffer[3] == SECRET_CODE[3]) {
-                Serial.println("PASSCODE ACCEPTED!");
+                log("PASSCODE ACCEPTED!");
                 appState = SELECT_MIX;
                 passcodeLen = 0;
                 drawSelectMix();
@@ -867,7 +798,7 @@ void loop() {
         if (touchInRect(tx, ty, 10, 180, 140, 45)) {
             // BACK
             drawViewMix(currentViewMix, "BACK");
-            waitForRelease();
+            hal_waitForRelease();
             appState = MAIN_MENU;
             resetGridColors();
             drawMainMenu();
@@ -875,7 +806,7 @@ void loop() {
         } else if (touchInRect(tx, ty, 170, 180, 140, 45)) {
             // POUR
             drawViewMix(currentViewMix, "POUR");
-            waitForRelease();
+            hal_waitForRelease();
 
             PourResult result = executePour(currentViewMix);
 
@@ -885,8 +816,8 @@ void loop() {
                                   result.units);
                 // Wait for OK tap
                 uint16_t ox, oy;
-                while (!getTouch(ox, oy)) delay(20);
-                waitForRelease();
+                while (!hal_getTouch(ox, oy) && !hal_shouldQuit()) hal_delay(20);
+                hal_waitForRelease();
             }
 
             appState = MAIN_MENU;
@@ -898,9 +829,9 @@ void loop() {
 
     // --------------------------------------------------
     case SELECT_MIX: {
-        waitForRelease();
+        hal_waitForRelease();
         currentEditMix = number;
-        log("Editing Mix " + String(number));
+        logf("Editing Mix %d", number);
         appState = EDIT_DASHBOARD;
         drawEditDashboard();
         break;
@@ -908,15 +839,17 @@ void loop() {
 
     // --------------------------------------------------
     case EDIT_DASHBOARD: {
-        waitForRelease();
+        hal_waitForRelease();
         if (number == 9) {
             // SAVE
             saveMixes();
-            log("Mix " + String(currentEditMix) + " saved");
+            logf("Mix %d saved", currentEditMix);
             for (int s = 0; s < 8; s++) {
                 int amt = syrupData[currentEditMix - 1][s];
-                String st = (amt > 0) ? String(amt) + " ml" : "OFF";
-                log("  Motor " + String(s + 1) + ": " + st);
+                if (amt > 0)
+                    logf("  Motor %d: %d ml", s + 1, amt);
+                else
+                    logf("  Motor %d: OFF", s + 1);
             }
             appState = MAIN_MENU;
             resetGridColors();
@@ -925,19 +858,18 @@ void loop() {
             // Increment syrup value (0→1→…→10→0)
             int &val = syrupData[currentEditMix - 1][number - 1];
             val = (val + 1) % 11;
-            log("Motor " + String(number) + " set to " + String(val)
-                + " (Mix " + String(currentEditMix) + ")");
+            logf("Motor %d set to %d (Mix %d)", number, val, currentEditMix);
 
             // Flash feedback then redraw just this cell
             int x1 = col * BOX_W;
             int y1 = row * BOX_H;
-            tft.fillRect(x1, y1, BOX_W, BOX_H, TFT_CYAN);
-            delay(50);
+            hal_fillRect(x1, y1, BOX_W, BOX_H, COL_CYAN);
+            hal_delay(50);
             drawEditCell(row, col);
         }
         break;
     }
     }  // switch
 
-    delay(20);
+    hal_delay(20);
 }
