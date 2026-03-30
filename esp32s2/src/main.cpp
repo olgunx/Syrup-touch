@@ -297,6 +297,9 @@ static void drawStatusBar() {
     hal_setTextDatum(HAL_DATUM_ML);
     hal_setTextColor(hal_color(180, 180, 200), hal_color(20, 20, 30));
     hal_drawString("SYRUP MIXER", 6, STATUS_H / 2, 1);
+    hal_setTextDatum(HAL_DATUM_MR);
+    hal_setTextColor(hal_color(180, 180, 200), hal_color(20, 20, 30));
+    hal_drawString("LONG PRESS TO VIEW & POUR", SCREEN_W - 4, STATUS_H / 2, 1);
 }
 
 // --- Draw a single grid cell with gap, no circle, syrup dots ---
@@ -920,7 +923,7 @@ void app_loop() {
         // Restore the touched cell to its normal raised state
         drawGridCell(row, col, MIX_COLORS[number - 1], false);
 
-        if (duration >= 500) {
+        if (duration >= 300) {
             // ---- Long press → view mix ----
             passcodeLen = 0;
             currentViewMix = number;
