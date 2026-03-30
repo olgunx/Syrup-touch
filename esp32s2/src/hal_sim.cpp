@@ -21,9 +21,9 @@
 // ============================================
 static const int SCREEN_W = 320;
 static const int SCREEN_H = 240;
-static const int SCALE    = 3;
-static const int WIN_W    = SCREEN_W * SCALE;
-static const int WIN_H    = SCREEN_H * SCALE;
+// Window size: 1.5× gives ~2.8" on a 14" laptop
+static const int WIN_W    = 480;
+static const int WIN_H    = 360;
 
 // ============================================
 // SDL GLOBALS
@@ -92,11 +92,11 @@ static int fontSlot(int font) {
 }
 
 static int fontPtSize(int font) {
-    // Point sizes chosen so that at SCALE, text matches TFT_eSPI character dimensions
+    // Render at native LCD-pixel sizes (no SCALE) to match TFT_eSPI bitmap fonts
     switch (font) {
-    case 1:  return 8  * SCALE;
-    case 2:  return 16 * SCALE;
-    default: return 26 * SCALE; // font 4
+    case 1:  return 8;
+    case 2:  return 16;
+    default: return 26; // font 4
     }
 }
 
@@ -152,41 +152,41 @@ static void drawText(const char *str, int x, int y, int font, HalDatum datum,
     colorToRGB(fg, fr, fgr, fb);
     SDL_Color sdlFg = {fr, fgr, fb, 255};
 
+    // Render with light AA at native LCD resolution — readable but still pixelated when scaled
     SDL_Surface *surf = TTF_RenderUTF8_Blended(f, str, sdlFg);
     if (!surf) return;
 
     SDL_Texture *tex = SDL_CreateTextureFromSurface(gRenderer, surf);
-    int textW = surf->w;
-    int textH = surf->h;
+    // Text size in LCD pixels (native resolution)
+    int lcdW = surf->w;
+    int lcdH = surf->h;
     SDL_FreeSurface(surf);
     if (!tex) return;
 
-    // Convert LCD-pixel coords to window coords
-    int px = x * SCALE;
-    int py = y * SCALE;
-
-    // Apply datum alignment
+    // Apply datum alignment (using native LCD dimensions)
+    int px = x;
+    int py = y;
     switch (datum) {
     case HAL_DATUM_TL: break;
-    case HAL_DATUM_TC: px -= textW / 2; break;
-    case HAL_DATUM_TR: px -= textW; break;
-    case HAL_DATUM_ML: py -= textH / 2; break;
-    case HAL_DATUM_MC: px -= textW / 2; py -= textH / 2; break;
-    case HAL_DATUM_MR: px -= textW; py -= textH / 2; break;
-    case HAL_DATUM_BL: py -= textH; break;
-    case HAL_DATUM_BC: px -= textW / 2; py -= textH; break;
-    case HAL_DATUM_BR: px -= textW; py -= textH; break;
+    case HAL_DATUM_TC: px -= lcdW / 2; break;
+    case HAL_DATUM_TR: px -= lcdW; break;
+    case HAL_DATUM_ML: py -= lcdH / 2; break;
+    case HAL_DATUM_MC: px -= lcdW / 2; py -= lcdH / 2; break;
+    case HAL_DATUM_MR: px -= lcdW; py -= lcdH / 2; break;
+    case HAL_DATUM_BL: py -= lcdH; break;
+    case HAL_DATUM_BC: px -= lcdW / 2; py -= lcdH; break;
+    case HAL_DATUM_BR: px -= lcdW; py -= lcdH; break;
     }
 
     // Draw background rect to clear area behind text
     uint8_t br, bg2, bb;
     colorToRGB(bg, br, bg2, bb);
     SDL_SetRenderDrawColor(gRenderer, br, bg2, bb, 255);
-    SDL_Rect bgRect = {px, py, textW, textH};
+    SDL_Rect bgRect = {px, py, lcdW, lcdH};
     SDL_RenderFillRect(gRenderer, &bgRect);
 
-    // Render text texture
-    SDL_Rect dstRect = {px, py, textW, textH};
+    // Render text at native LCD resolution
+    SDL_Rect dstRect = {px, py, lcdW, lcdH};
     SDL_RenderCopy(gRenderer, tex, nullptr, &dstRect);
     SDL_DestroyTexture(tex);
 }
@@ -194,29 +194,34 @@ static void drawText(const char *str, int x, int y, int font, HalDatum datum,
 // ============================================
 // HAL DISPLAY IMPLEMENTATION
 // ============================================
+// Simulate ILI9341 RGB565 (65K color) quantization:
+// Truncate R to 5 bits, G to 6 bits, B to 5 bits, then expand back to 8-bit.
+// This ensures the simulator shows the same color banding as the real display.
 HalColor hal_color(uint8_t r, uint8_t g, uint8_t b) {
-    return ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
+    uint8_t r5 = (r >> 3) << 3;  // keep top 5 bits
+    uint8_t g6 = (g >> 2) << 2;  // keep top 6 bits
+    uint8_t b5 = (b >> 3) << 3;  // keep top 5 bits
+    return ((uint32_t)r5 << 16) | ((uint32_t)g6 << 8) | b5;
 }
 
 void hal_fillScreen(HalColor c) {
     setColor(c);
-    SDL_Rect rc = {0, 0, WIN_W, WIN_H};
+    SDL_Rect rc = {0, 0, SCREEN_W, SCREEN_H};
     SDL_RenderFillRect(gRenderer, &rc);
 }
 
 void hal_fillRect(int x, int y, int w, int h, HalColor c) {
     setColor(c);
-    SDL_Rect rc = {x * SCALE, y * SCALE, w * SCALE, h * SCALE};
+    SDL_Rect rc = {x, y, w, h};
     SDL_RenderFillRect(gRenderer, &rc);
 }
 
 void hal_drawRect(int x, int y, int w, int h, HalColor c) {
     setColor(c);
-    // Draw 4 edges with thickness = SCALE
-    SDL_Rect top    = {x * SCALE, y * SCALE, w * SCALE, SCALE};
-    SDL_Rect bottom = {x * SCALE, (y + h - 1) * SCALE, w * SCALE, SCALE};
-    SDL_Rect left   = {x * SCALE, y * SCALE, SCALE, h * SCALE};
-    SDL_Rect right  = {(x + w - 1) * SCALE, y * SCALE, SCALE, h * SCALE};
+    SDL_Rect top    = {x, y, w, 1};
+    SDL_Rect bottom = {x, y + h - 1, w, 1};
+    SDL_Rect left   = {x, y, 1, h};
+    SDL_Rect right  = {x + w - 1, y, 1, h};
     SDL_RenderFillRect(gRenderer, &top);
     SDL_RenderFillRect(gRenderer, &bottom);
     SDL_RenderFillRect(gRenderer, &left);
@@ -228,8 +233,7 @@ void hal_fillCircle(int cx, int cy, int r, HalColor c) {
     // Midpoint circle fill
     for (int dy = -r; dy <= r; dy++) {
         int dx = (int)sqrt((double)(r * r - dy * dy));
-        SDL_Rect rc = {(cx - dx) * SCALE, (cy + dy) * SCALE,
-                       (2 * dx + 1) * SCALE, SCALE};
+        SDL_Rect rc = {cx - dx, cy + dy, 2 * dx + 1, 1};
         SDL_RenderFillRect(gRenderer, &rc);
     }
 }
@@ -240,7 +244,7 @@ void hal_drawCircle(int cx, int cy, int r, HalColor c) {
     int x0 = r, y0 = 0, err = 0;
     while (x0 >= y0) {
         auto plot = [&](int px, int py) {
-            SDL_Rect rc = {px * SCALE, py * SCALE, SCALE, SCALE};
+            SDL_Rect rc = {px, py, 1, 1};
             SDL_RenderFillRect(gRenderer, &rc);
         };
         plot(cx + x0, cy + y0); plot(cx + y0, cy + x0);
@@ -254,7 +258,7 @@ void hal_drawCircle(int cx, int cy, int r, HalColor c) {
 
 void hal_drawHLine(int x, int y, int w, HalColor c) {
     setColor(c);
-    SDL_Rect rc = {x * SCALE, y * SCALE, w * SCALE, SCALE};
+    SDL_Rect rc = {x, y, w, 1};
     SDL_RenderFillRect(gRenderer, &rc);
 }
 
@@ -385,8 +389,8 @@ void hal_pumpEvents() {
         case SDL_MOUSEBUTTONDOWN:
             if (e.button.button == SDL_BUTTON_LEFT) {
                 gMouseDown = true;
-                gMouseX = (uint16_t)(e.button.x / SCALE);
-                gMouseY = (uint16_t)(e.button.y / SCALE);
+                gMouseX = (uint16_t)(e.button.x * SCREEN_W / WIN_W);
+                gMouseY = (uint16_t)(e.button.y * SCREEN_H / WIN_H);
                 if (gMouseX >= SCREEN_W) gMouseX = SCREEN_W - 1;
                 if (gMouseY >= SCREEN_H) gMouseY = SCREEN_H - 1;
             }
@@ -398,8 +402,8 @@ void hal_pumpEvents() {
             break;
         case SDL_MOUSEMOTION:
             if (gMouseDown) {
-                gMouseX = (uint16_t)(e.motion.x / SCALE);
-                gMouseY = (uint16_t)(e.motion.y / SCALE);
+                gMouseX = (uint16_t)(e.motion.x * SCREEN_W / WIN_W);
+                gMouseY = (uint16_t)(e.motion.y * SCREEN_H / WIN_H);
                 if (gMouseX >= SCREEN_W) gMouseX = SCREEN_W - 1;
                 if (gMouseY >= SCREEN_H) gMouseY = SCREEN_H - 1;
             }
@@ -432,7 +436,7 @@ int main(int argc, char *argv[]) {
     }
 
     gWindow = SDL_CreateWindow(
-        "Syrup Touch Mixer — Simulator",
+        "Syrup Mixer — ILI9341 320x240 RGB565 (1.5x)",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         WIN_W, WIN_H, SDL_WINDOW_SHOWN);
     if (!gWindow) {
@@ -456,7 +460,8 @@ int main(int argc, char *argv[]) {
 
     // Create offscreen render target to avoid double-buffer flickering
     gRenderTarget = SDL_CreateTexture(gRenderer, SDL_PIXELFORMAT_RGBA8888,
-        SDL_TEXTUREACCESS_TARGET, WIN_W, WIN_H);
+        SDL_TEXTUREACCESS_TARGET, SCREEN_W, SCREEN_H);
+    SDL_SetTextureScaleMode(gRenderTarget, SDL_ScaleModeNearest);
     SDL_SetRenderTarget(gRenderer, gRenderTarget);
 
     // Init TTF fonts

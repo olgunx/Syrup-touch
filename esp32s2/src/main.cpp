@@ -41,10 +41,18 @@ unsigned long heartbeatCount = 0;
 // ============================================
 const int SCREEN_W = 320;
 const int SCREEN_H = 240;
-const int BOX_W = SCREEN_W / 3;  // 106
-const int BOX_H = SCREEN_H / 3;  // 80
+const int STATUS_H = 20;     // top status bar height
+const int GRID_Y   = STATUS_H;
+const int GRID_H   = SCREEN_H - STATUS_H;
+const int GAP      = 3;      // gap between cells
+const int BOX_W    = SCREEN_W / 3;   // 106 — grid math unchanged for touch mapping
+const int BOX_H    = GRID_H / 3;     // ~73
 
 HalColor gridColors[3][3];
+
+// Per-mix color palette (muted, distinct, pleasant)
+static HalColor MIX_COLORS[9];
+static HalColor MIX_COLORS_LIGHT[9];  // brighter version for press highlight
 
 // ============================================
 // COLOUR PALETTE
@@ -80,6 +88,28 @@ static void initColors() {
     COL_LIGHT_GRAY   = hal_color(200, 200, 200);
     COL_TITLE_YELLOW = hal_color(255, 200, 0);
     COL_PAUSE_TITLE  = hal_color(255, 160, 0);
+
+    // Per-mix colors — muted, distinct hues
+    MIX_COLORS[0] = hal_color(45, 80, 120);   // steel blue
+    MIX_COLORS[1] = hal_color(100, 60, 110);  // muted purple
+    MIX_COLORS[2] = hal_color(30, 100, 90);   // teal
+    MIX_COLORS[3] = hal_color(120, 70, 40);   // warm brown
+    MIX_COLORS[4] = hal_color(90, 40, 60);    // muted burgundy
+    MIX_COLORS[5] = hal_color(40, 90, 60);    // forest green
+    MIX_COLORS[6] = hal_color(100, 85, 30);   // olive gold
+    MIX_COLORS[7] = hal_color(60, 70, 110);   // slate blue
+    MIX_COLORS[8] = hal_color(80, 50, 80);    // plum
+
+    // Lighter versions for press highlight (+60 clamped)
+    for (int i = 0; i < 9; i++) {
+        int r = ((MIX_COLORS[i] >> 16) & 0xFF) + 60;
+        int g = ((MIX_COLORS[i] >> 8)  & 0xFF) + 60;
+        int b = ( MIX_COLORS[i]        & 0xFF) + 60;
+        if (r > 255) r = 255;
+        if (g > 255) g = 255;
+        if (b > 255) b = 255;
+        MIX_COLORS_LIGHT[i] = hal_color(r, g, b);
+    }
 }
 
 // ============================================
@@ -219,44 +249,148 @@ static void saveMixes() {
 // ============================================
 static void resetGridColors() {
     for (int r = 0; r < 3; r++)
-        for (int c = 0; c < 3; c++)
-            gridColors[r][c] = COL_DEFAULT;
+        for (int c = 0; c < 3; c++) {
+            int mix = r * 3 + c;
+            gridColors[r][c] = MIX_COLORS[mix];
+        }
+}
+
+// Count how many syrups are configured for a mix (0-8)
+static int mixSyrupCount(int mixIdx) {
+    int count = 0;
+    for (int s = 0; s < 8; s++)
+        if (syrupData[mixIdx][s] > 0) count++;
+    return count;
 }
 
 // ============================================
 // UI SCREENS
 // ============================================
 
-// --- Draw a single grid cell (avoids full-screen redraw) ---
-static void drawGridCell(int row, int col, HalColor color) {
-    int x1  = col * BOX_W;
-    int y1  = row * BOX_H;
-    int num = row * 3 + col + 1;
-    int cx  = x1 + BOX_W / 2;
-    int cy  = y1 + BOX_H / 2;
-
-    hal_fillRect(x1, y1, BOX_W, BOX_H, color);
-    hal_drawRect(x1, y1, BOX_W, BOX_H, COL_WHITE);
-    hal_fillCircle(cx, cy, 24, COL_BLACK);
-    hal_drawCircle(cx, cy, 24, COL_WHITE);
-    hal_setTextDatum(HAL_DATUM_MC);
-    hal_setTextColor(COL_WHITE);
-    hal_drawNumber(num, cx, cy, 4);
+// --- Status bar at top ---
+static void drawStatusBar() {
+    hal_fillRect(0, 0, SCREEN_W, STATUS_H, hal_color(20, 20, 30));
+    hal_drawHLine(0, STATUS_H - 1, SCREEN_W, COL_GRAY);
+    hal_setTextDatum(HAL_DATUM_ML);
+    hal_setTextColor(hal_color(180, 180, 200), hal_color(20, 20, 30));
+    hal_drawString("SYRUP MIXER", 6, STATUS_H / 2, 1);
 }
 
-// --- Shared 3×3 numbered grid ---
-static void drawGrid(HalColor cellColor, bool useGridColors) {
-    hal_fillScreen(COL_BLACK);
-    for (int row = 0; row < 3; row++) {
-        for (int col = 0; col < 3; col++) {
-            HalColor color = useGridColors ? gridColors[row][col] : cellColor;
-            drawGridCell(row, col, color);
+// --- Draw a single grid cell with gap, no circle, syrup dots ---
+static void drawGridCell(int row, int col, HalColor color, bool pressed = false) {
+    int num = row * 3 + col + 1;
+
+    // Cell rect with gaps
+    int x1 = col * BOX_W + GAP;
+    int y1 = GRID_Y + row * BOX_H + GAP;
+    int cw = BOX_W - GAP * 2;
+    int ch = BOX_H - GAP * 2;
+
+    // Darken base color when pressed
+    HalColor base = pressed ? hal_color(
+        (((color >> 16) & 0xFF) > 40) ? (((color >> 16) & 0xFF) - 40) : 0,
+        (((color >> 8)  & 0xFF) > 40) ? (((color >> 8)  & 0xFF) - 40) : 0,
+        (( color        & 0xFF) > 40) ? (( color        & 0xFF) - 40) : 0
+    ) : color;
+
+    // Fill cell background
+    hal_fillRect(x1, y1, cw, ch, base);
+
+    if (pressed) {
+        // Pressed: shadow on top, highlight on bottom → sunken look
+        HalColor shadow = hal_color(
+            (((base >> 16) & 0xFF) > 30) ? (((base >> 16) & 0xFF) - 30) : 0,
+            (((base >> 8)  & 0xFF) > 30) ? (((base >> 8)  & 0xFF) - 30) : 0,
+            (( base        & 0xFF) > 30) ? (( base        & 0xFF) - 30) : 0
+        );
+        hal_fillRect(x1, y1, cw, 3, shadow);
+
+        HalColor highlight = hal_color(
+            (((base >> 16) & 0xFF) + 25) > 255 ? 255 : (((base >> 16) & 0xFF) + 25),
+            (((base >> 8)  & 0xFF) + 25) > 255 ? 255 : (((base >> 8)  & 0xFF) + 25),
+            (( base        & 0xFF) + 25) > 255 ? 255 : (( base        & 0xFF) + 25)
+        );
+        hal_fillRect(x1, y1 + ch - 3, cw, 3, highlight);
+    } else {
+        // Unpressed: highlight on top, shadow on bottom → raised look
+        HalColor highlight = hal_color(
+            (((color >> 16) & 0xFF) + 30) > 255 ? 255 : (((color >> 16) & 0xFF) + 30),
+            (((color >> 8)  & 0xFF) + 30) > 255 ? 255 : (((color >> 8)  & 0xFF) + 30),
+            (( color        & 0xFF) + 30) > 255 ? 255 : (( color        & 0xFF) + 30)
+        );
+        hal_fillRect(x1, y1, cw, 3, highlight);
+
+        HalColor shadow = hal_color(
+            (((color >> 16) & 0xFF) > 25) ? (((color >> 16) & 0xFF) - 25) : 0,
+            (((color >> 8)  & 0xFF) > 25) ? (((color >> 8)  & 0xFF) - 25) : 0,
+            (( color        & 0xFF) > 25) ? (( color        & 0xFF) - 25) : 0
+        );
+        hal_fillRect(x1, y1 + ch - 3, cw, 3, shadow);
+    }
+
+    // Content offset: shift down+right 2px when pressed
+    int ox = pressed ? 2 : 0;
+    int oy = pressed ? 2 : 0;
+
+    // Number — centered in upper portion of cell
+    int cx = x1 + cw / 2 + ox;
+    int cy = y1 + ch / 2 - 6 + oy;
+    hal_setTextDatum(HAL_DATUM_MC);
+    hal_setTextColor(COL_WHITE, base);
+    hal_drawNumber(num, cx, cy, 4);
+
+    // Syrup indicator dots — row near bottom of cell
+    int configured = mixSyrupCount(num - 1);
+    if (configured > 0) {
+        int dotR   = 3;
+        int dotGap = 10;
+        int totalW = configured * dotGap - (dotGap - dotR * 2);
+        int dotX   = cx - totalW / 2 + dotR;
+        int dotY   = y1 + ch - 12 + oy;
+        for (int d = 0; d < configured; d++) {
+            hal_fillCircle(dotX + d * dotGap, dotY, dotR, hal_color(180, 220, 255));
         }
     }
 }
 
-static void drawMainMenu()  { drawGrid(COL_DEFAULT, true);  }
-static void drawSelectMix()  { drawGrid(COL_PURPLE,  false); }
+// --- Draw a single grid cell for select-mix mode (purple tinted) ---
+static void drawSelectCell(int row, int col, HalColor color) {
+    int num = row * 3 + col + 1;
+
+    int x1 = col * BOX_W + GAP;
+    int y1 = GRID_Y + row * BOX_H + GAP;
+    int cw = BOX_W - GAP * 2;
+    int ch = BOX_H - GAP * 2;
+
+    hal_fillRect(x1, y1, cw, ch, color);
+    hal_fillRect(x1, y1, cw, 3, hal_color(130, 50, 130));
+    hal_fillRect(x1, y1 + ch - 3, cw, 3, hal_color(50, 0, 50));
+
+    int cx = x1 + cw / 2;
+    int cy = y1 + ch / 2;
+    hal_setTextDatum(HAL_DATUM_MC);
+    hal_setTextColor(COL_WHITE, color);
+    hal_drawNumber(num, cx, cy, 4);
+}
+
+// --- Full grid draw ---
+static void drawGrid(bool useGridColors, bool selectMode) {
+    hal_fillScreen(hal_color(15, 15, 20));
+    drawStatusBar();
+    for (int row = 0; row < 3; row++) {
+        for (int col = 0; col < 3; col++) {
+            if (selectMode) {
+                drawSelectCell(row, col, COL_PURPLE);
+            } else {
+                HalColor color = useGridColors ? gridColors[row][col] : COL_DEFAULT;
+                drawGridCell(row, col, color);
+            }
+        }
+    }
+}
+
+static void drawMainMenu()   { drawGrid(true,  false); }
+static void drawSelectMix()  { drawGrid(false, true);  }
 
 // --- Edit dashboard (syrup amounts + SAVE) ---
 static void drawEditDashboard() {
@@ -736,25 +870,31 @@ void app_loop() {
         return;
     }
 
+    // Ignore touches in status bar area
+    if (ty < GRID_Y) {
+        hal_delay(20);
+        return;
+    }
+
     // Map touch to 3×3 grid
     int col    = tx / BOX_W;  if (col > 2) col = 2;
-    int row    = ty / BOX_H;  if (row > 2) row = 2;
+    int row    = (ty - GRID_Y) / BOX_H;  if (row < 0) row = 0; if (row > 2) row = 2;
     int number = row * 3 + col + 1;
 
     switch (appState) {
 
     // --------------------------------------------------
     case MAIN_MENU: {
-        // Visual highlight — only redraw the touched cell
-        drawGridCell(row, col, COL_YELLOW);
+        // Visual feedback — 3D pressed (sunken) effect
+        drawGridCell(row, col, MIX_COLORS[number - 1], true);
 
         // Measure press duration
         unsigned long pressStart = hal_millis();
         hal_waitForRelease();
         unsigned long duration = hal_millis() - pressStart;
 
-        // Restore the touched cell
-        drawGridCell(row, col, COL_DEFAULT);
+        // Restore the touched cell to its normal raised state
+        drawGridCell(row, col, MIX_COLORS[number - 1], false);
 
         if (duration >= 500) {
             // ---- Long press → view mix ----
