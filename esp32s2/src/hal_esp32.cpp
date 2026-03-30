@@ -152,6 +152,27 @@ static const int LED_PIN = 15;
 void hal_ledOn()  { digitalWrite(LED_PIN, HIGH); }
 void hal_ledOff() { digitalWrite(LED_PIN, LOW); }
 
+// ============================================
+// BUZZER (passive buzzer on BUZZER_PIN via LEDC)
+// ============================================
+static const int BUZZER_LEDC_CH = 0;
+
+void hal_buzzerInit() {
+    ledcSetup(BUZZER_LEDC_CH, 2000, 8);
+    ledcAttachPin(BUZZER_PIN, BUZZER_LEDC_CH);
+    ledcWriteTone(BUZZER_LEDC_CH, 0);
+}
+
+void hal_buzzerTone(int freqHz, int durationMs) {
+    ledcWriteTone(BUZZER_LEDC_CH, freqHz);
+    delay(durationMs);
+    ledcWriteTone(BUZZER_LEDC_CH, 0);
+}
+
+void hal_buzzerOff() {
+    ledcWriteTone(BUZZER_LEDC_CH, 0);
+}
+
 void hal_pumpEvents() { /* no-op on ESP32 */ }
 bool hal_shouldQuit() { return false; }
 
@@ -181,6 +202,9 @@ void setup() {
     // LED
     pinMode(LED_PIN, OUTPUT);
     digitalWrite(LED_PIN, LOW);
+
+    // Buzzer
+    hal_buzzerInit();
 
     // Motors
     hal_initMotors();

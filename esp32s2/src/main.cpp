@@ -158,6 +158,29 @@ static bool touchInRect(uint16_t tx, uint16_t ty,
 }
 
 // ============================================
+// BUZZER HELPERS
+// ============================================
+static void beepTouch() {
+    hal_buzzerTone(2500, 25);
+}
+
+static void beepPourDone() {
+    // Three ascending tones as a "done" notification
+    hal_buzzerTone(1000, 150);
+    hal_delay(60);
+    hal_buzzerTone(1500, 150);
+    hal_delay(60);
+    hal_buzzerTone(2000, 300);
+}
+
+static void beepPourStopped() {
+    // Two low warning tones
+    hal_buzzerTone(800, 200);
+    hal_delay(100);
+    hal_buzzerTone(600, 300);
+}
+
+// ============================================
 // PERSISTENT STORAGE (HAL + manual JSON)
 // ============================================
 static const char *DATA_FILE = "/syrup_mixes.json";
@@ -885,6 +908,7 @@ void app_loop() {
 
     // --------------------------------------------------
     case MAIN_MENU: {
+        beepTouch();
         // Visual feedback — 3D pressed (sunken) effect
         drawGridCell(row, col, MIX_COLORS[number - 1], true);
 
@@ -937,6 +961,7 @@ void app_loop() {
     case VIEW_MIX: {
         if (touchInRect(tx, ty, 10, 180, 140, 45)) {
             // BACK
+            beepTouch();
             drawViewMix(currentViewMix, "BACK");
             hal_waitForRelease();
             appState = MAIN_MENU;
@@ -945,12 +970,19 @@ void app_loop() {
 
         } else if (touchInRect(tx, ty, 170, 180, 140, 45)) {
             // POUR
+            beepTouch();
             drawViewMix(currentViewMix, "POUR");
             hal_waitForRelease();
 
             PourResult result = executePour(currentViewMix);
 
             if (result.status != POUR_EMPTY) {
+                // Play signal based on pour outcome
+                if (result.status == POUR_COMPLETE)
+                    beepPourDone();
+                else
+                    beepPourStopped();
+
                 drawSummaryScreen(currentViewMix, result.status,
                                   result.elapsed, result.motors,
                                   result.units);
@@ -969,6 +1001,7 @@ void app_loop() {
 
     // --------------------------------------------------
     case SELECT_MIX: {
+        beepTouch();
         hal_waitForRelease();
         currentEditMix = number;
         logf("Editing Mix %d", number);
@@ -979,6 +1012,7 @@ void app_loop() {
 
     // --------------------------------------------------
     case EDIT_DASHBOARD: {
+        beepTouch();
         hal_waitForRelease();
         if (number == 9) {
             // SAVE

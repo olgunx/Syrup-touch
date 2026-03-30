@@ -91,6 +91,11 @@ void          hal_log(const char *msg);
 void hal_ledOn();
 void hal_ledOff();
 
+// Buzzer
+void hal_buzzerInit();
+void hal_buzzerTone(int freqHz, int durationMs);
+void hal_buzzerOff();
+
 // ============================================
 // LIFECYCLE
 // ============================================

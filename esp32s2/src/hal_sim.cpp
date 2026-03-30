@@ -376,6 +376,10 @@ void hal_log(const char *msg) {
 void hal_ledOn()  { /* no-op in simulator */ }
 void hal_ledOff() { /* no-op in simulator */ }
 
+void hal_buzzerInit() { /* no-op in simulator */ }
+void hal_buzzerTone(int freqHz, int durationMs) { (void)freqHz; (void)durationMs; }
+void hal_buzzerOff() { /* no-op in simulator */ }
+
 // ============================================
 // EVENT PUMP
 // ============================================

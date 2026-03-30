@@ -22,7 +22,9 @@
 // SPI (FSPI) for display & touch:
 //   SCK=36, MOSI=35, MISO=37, LCD_CS=34, LCD_DC=33, LCD_RST=18, TOUCH_CS=16, TOUCH_IRQ=38
 //
-// Spare GPIOs: 15 (onboard LED), 39, 40
+// Spare GPIOs: 15 (onboard LED), 39
+//
+// Buzzer: GPIO 40
 
 struct MotorPins {
     uint8_t in1;
@@ -57,5 +59,10 @@ constexpr uint8_t XPT_IRQ = 38;      // Touch interrupt pin (active LOW)
 // PASSCODE (tap sequence to enter edit mode)
 // ============================================
 constexpr int SECRET_CODE[4] = {4, 7, 2, 5};
+
+// ============================================
+// BUZZER
+// ============================================
+constexpr uint8_t BUZZER_PIN = 40;
 
 #endif
