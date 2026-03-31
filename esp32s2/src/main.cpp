@@ -19,7 +19,9 @@ AppState appState = MAIN_MENU;
 // ============================================
 // MIX DATA — syrupData[mix 0-8][syrup 0-7]
 // ============================================
+
 int syrupData[9][8];
+char mixNames[9][2][17]; // 2 lines, 16 chars + null each
 int currentEditMix = 1;
 int currentViewMix = 1;
 
@@ -205,29 +207,46 @@ static int jsonGetInt(const char *json, const char *key, int fallback) {
     return fallback;
 }
 
+
+// Helper: extract a string value from a JSON object ("key": ["line1", "line2"])
+static void jsonGetMixName(const char *json, const char *key, char out[2][17]) {
+    const char *p = strstr(json, key);
+    if (!p) { out[0][0] = 0; out[1][0] = 0; return; }
+    p = strchr(p, '[');
+    if (!p) { out[0][0] = 0; out[1][0] = 0; return; }
+    p++;
+    for (int i = 0; i < 2; i++) {
+        while (*p && *p != '"') p++;
+        if (!*p) { out[i][0] = 0; continue; }
+        p++;
+        int j = 0;
+        while (*p && *p != '"' && j < 16) out[i][j++] = *p++;
+        out[i][j] = 0;
+        while (*p && *p != ',' && *p != ']') p++;
+        if (*p == ',') p++;
+    }
+}
+
 static void loadMixes() {
     char buf[4096];
     int n = hal_readFile(DATA_FILE, buf, sizeof(buf));
     if (n <= 0) {
         log("No data file — using defaults");
         memset(syrupData, 0, sizeof(syrupData));
+        for (int i = 0; i < 9; ++i) { mixNames[i][0][0] = 0; mixNames[i][1][0] = 0; }
         return;
     }
 
-    // Parse: top-level keys "1".."9", each containing "syrup_1".."syrup_8"
+    // Parse: top-level keys "1".."9", each containing "syrup_1".."syrup_8" and "name"
     for (int m = 1; m <= 9; m++) {
-        // Find the block for this mix by locating its key
         char mixKey[8];
         snprintf(mixKey, sizeof(mixKey), "\"%d\"", m);
         const char *mixStart = strstr(buf, mixKey);
         if (!mixStart) continue;
-        // Find the opening { for this mix object
         const char *objStart = strchr(mixStart, '{');
         if (!objStart) continue;
-        // Find the closing }
         const char *objEnd = strchr(objStart, '}');
         if (!objEnd) continue;
-        // Extract substring for this object
         char objBuf[512];
         size_t objLen = (size_t)(objEnd - objStart + 1);
         if (objLen >= sizeof(objBuf)) objLen = sizeof(objBuf) - 1;
@@ -239,6 +258,8 @@ static void loadMixes() {
             snprintf(sk, sizeof(sk), "syrup_%d", s);
             syrupData[m - 1][s - 1] = jsonGetInt(objBuf, sk, 0);
         }
+        // Load mix name (2 lines)
+        jsonGetMixName(objBuf, "name", mixNames[m - 1]);
     }
     log("Mixes loaded");
 }
@@ -255,6 +276,10 @@ static void saveMixes() {
                             s, syrupData[m - 1][s - 1],
                             (s < 8) ? "," : "");
         }
+        // Write mix name as JSON array
+        pos += snprintf(buf + pos, sizeof(buf) - pos,
+            "    \"name\": [\"%s\", \"%s\"]\n",
+            mixNames[m - 1][0], mixNames[m - 1][1]);
         pos += snprintf(buf + pos, sizeof(buf) - pos,
                         "  }%s\n", (m < 9) ? "," : "");
     }
@@ -358,25 +383,23 @@ static void drawGridCell(int row, int col, HalColor color, bool pressed = false)
     int ox = pressed ? 2 : 0;
     int oy = pressed ? 2 : 0;
 
-    // Number — centered in upper portion of cell
-    int cx = x1 + cw / 2 + ox;
-    int cy = y1 + ch / 2 - 6 + oy;
+    // Number — top-left corner, extra small font
+    int num_x = x1 + 6 + ox;
+    int num_y = y1 + 6 + oy;
+    hal_setTextDatum(HAL_DATUM_TL);
+    hal_setTextColor(COL_WHITE, base);
+    hal_drawNumber(num, num_x, num_y, 1);
+
+    // Mix name — two lines, centered in cell, reduced line spacing
+    int name_cx = x1 + cw / 2 + ox;
+    int name_cy = y1 + ch / 2 + oy;
     hal_setTextDatum(HAL_DATUM_MC);
     hal_setTextColor(COL_WHITE, base);
-    hal_drawNumber(num, cx, cy, 4);
-
-    // Syrup indicator dots — row near bottom of cell
-    int configured = mixSyrupCount(num - 1);
-    if (configured > 0) {
-        int dotR   = 3;
-        int dotGap = 10;
-        int totalW = configured * dotGap - (dotGap - dotR * 2);
-        int dotX   = cx - totalW / 2 + dotR;
-        int dotY   = y1 + ch - 12 + oy;
-        for (int d = 0; d < configured; d++) {
-            hal_fillCircle(dotX + d * dotGap, dotY, dotR, hal_color(180, 220, 255));
-        }
-    }
+    int name_offset = 10; // reduced vertical offset between lines
+    if (mixNames[num - 1][0][0])
+        hal_drawString(mixNames[num - 1][0], name_cx, name_cy - name_offset, 2);
+    if (mixNames[num - 1][1][0])
+        hal_drawString(mixNames[num - 1][1], name_cx, name_cy + name_offset, 2);
 }
 
 // --- Draw a single grid cell for select-mix mode (purple tinted) ---

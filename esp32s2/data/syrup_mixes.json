@@ -1,13 +1,14 @@
 {
   "1": {
-    "syrup_1": 1,
-    "syrup_2": 0,
+    "syrup_1": 2,
+    "syrup_2": 2,
     "syrup_3": 1,
-    "syrup_4": 0,
-    "syrup_5": 0,
+    "syrup_4": 1,
+    "syrup_5": 4,
     "syrup_6": 0,
     "syrup_7": 0,
-    "syrup_8": 1
+    "syrup_8": 1,
+    "name": ["Dark", "Latte"]
   },
   "2": {
     "syrup_1": 10,
@@ -17,7 +18,8 @@
     "syrup_5": 10,
     "syrup_6": 10,
     "syrup_7": 10,
-    "syrup_8": 10
+    "syrup_8": 10,
+    "name": ["Karamel", "Çikolata"]
   },
   "3": {
     "syrup_1": 0,
@@ -28,6 +30,7 @@
     "syrup_6": 0,
     "syrup_7": 0,
     "syrup_8": 0
+    "name": ["Caramel", "Latte"]
   },
   "4": {
     "syrup_1": 1,
@@ -38,6 +41,7 @@
     "syrup_6": 1,
     "syrup_7": 1,
     "syrup_8": 1
+    "name": ["Caramel", "Machiato"]
   },
   "5": {
     "syrup_1": 0,
@@ -47,7 +51,8 @@
     "syrup_5": 2,
     "syrup_6": 2,
     "syrup_7": 0,
-    "syrup_8": 0
+    "syrup_8": 0,
+    "name": ["Vanilya", "Caramel"]
   },
   "6": {
     "syrup_1": 0,
@@ -58,6 +63,7 @@
     "syrup_6": 0,
     "syrup_7": 0,
     "syrup_8": 0
+    "name": ["Fındık", "Fıstık"]
   },
   "7": {
     "syrup_1": 0,
@@ -68,6 +74,7 @@
     "syrup_6": 0,
     "syrup_7": 0,
     "syrup_8": 0
+    "name": ["Naneli", "Karamel"]
   },
   "8": {
     "syrup_1": 0,
@@ -78,6 +85,7 @@
     "syrup_6": 0,
     "syrup_7": 0,
     "syrup_8": 0
+    "name": ["Raspberry", "Vanilya"]
   },
   "9": {
     "syrup_1": 0,
@@ -88,5 +96,6 @@
     "syrup_6": 0,
     "syrup_7": 0,
     "syrup_8": 0
+    "name": ["Blueberry", "Karamel"]
   }
 }
