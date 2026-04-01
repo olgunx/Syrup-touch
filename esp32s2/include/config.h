@@ -12,7 +12,7 @@
 // ESP32-S2 Mini pinout:
 //   Motor 1: GPIO  1, GPIO  2
 //   Motor 2: GPIO  3, GPIO  4
-//   Motor 3: GPIO  5, GPIO  6
+//   Motor 3: GPIO 39, GPIO  6
 //   Motor 4: GPIO  7, GPIO  8
 //   Motor 5: GPIO  9, GPIO 10
 //   Motor 6: GPIO 11, GPIO 12
@@ -22,7 +22,7 @@
 // SPI (FSPI) for display & touch:
 //   SCK=36, MOSI=35, MISO=37, LCD_CS=34, LCD_DC=33, LCD_RST=18, TOUCH_CS=16, TOUCH_IRQ=38
 //
-// Spare GPIOs: 15 (onboard LED), 39
+// Spare GPIOs: 15 (onboard LED), 5 (strapping pin — avoid for motors)
 //
 // Buzzer: GPIO 40
 
@@ -34,7 +34,7 @@ struct MotorPins {
 constexpr MotorPins MOTOR_PINS[8] = {
     { 1,  2},  // Motor 1 → syrup_1
     { 3,  4},  // Motor 2 → syrup_2
-    { 5,  6},  // Motor 3 → syrup_3
+    {39,  6},  // Motor 3 → syrup_3
     { 7,  8},  // Motor 4 → syrup_4
     { 9, 10},  // Motor 5 → syrup_5
     {11, 12},  // Motor 6 → syrup_6

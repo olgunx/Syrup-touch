@@ -180,6 +180,9 @@ bool hal_shouldQuit() { return false; }
 // ARDUINO ENTRY POINTS → app_setup / app_loop
 // ============================================
 void setup() {
+    // Motors FIRST — prevent GPIO float from activating motors during boot
+    hal_initMotors();
+
     Serial.begin(115200);
     unsigned long serialWait = millis();
     while (!Serial && (millis() - serialWait < 3000)) delay(10);
@@ -205,9 +208,6 @@ void setup() {
 
     // Buzzer
     hal_buzzerInit();
-
-    // Motors
-    hal_initMotors();
 
     // Hand off to shared app code
     app_setup();
