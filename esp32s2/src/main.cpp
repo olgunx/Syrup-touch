@@ -383,23 +383,23 @@ static void drawGridCell(int row, int col, HalColor color, bool pressed = false)
     int ox = pressed ? 2 : 0;
     int oy = pressed ? 2 : 0;
 
-    // Number — top-left corner, extra small font
-    int num_x = x1 + 6 + ox;
-    int num_y = y1 + 6 + oy;
+    // Number — top-left corner, configurable font size
+    int num_x = x1 + 8 + ox;
+    int num_y = y1 + 8 + oy;
     hal_setTextDatum(HAL_DATUM_TL);
     hal_setTextColor(COL_WHITE, base);
-    hal_drawNumber(num, num_x, num_y, 1);
+    hal_drawNumber(num, num_x, num_y, FONT_SIZE_BOXNUMBER / 20);
 
-    // Mix name — two lines, centered in cell, reduced line spacing
+    // Mix name — two lines, centered lower in cell, configurable font size
     int name_cx = x1 + cw / 2 + ox;
-    int name_cy = y1 + ch / 2 + oy;
+    int name_cy = y1 + (ch * 0.60) + oy; // move names to ~10% from top
     hal_setTextDatum(HAL_DATUM_MC);
     hal_setTextColor(COL_WHITE, base);
-    int name_offset = 10; // reduced vertical offset between lines
+    int name_offset = 10; // vertical offset between lines
     if (mixNames[num - 1][0][0])
-        hal_drawString(mixNames[num - 1][0], name_cx, name_cy - name_offset, 2);
+        hal_drawString(mixNames[num - 1][0], name_cx, name_cy - name_offset, FONT_SIZE_BOXNAME / 20);
     if (mixNames[num - 1][1][0])
-        hal_drawString(mixNames[num - 1][1], name_cx, name_cy + name_offset, 2);
+        hal_drawString(mixNames[num - 1][1], name_cx, name_cy + name_offset, FONT_SIZE_BOXNAME / 20);
 }
 
 // --- Draw a single grid cell for select-mix mode (purple tinted) ---

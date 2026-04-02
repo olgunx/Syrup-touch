@@ -1,3 +1,8 @@
+// ============================================
+// UI FONT SIZES (0-100 scale)
+// ============================================
+constexpr int FONT_SIZE_BOXNUMBER = 35; // Font size for numbers in grid cells (0-100)
+constexpr int FONT_SIZE_BOXNAME = 50;   // Font size for names in grid cells (0-100)
 #ifndef CONFIG_H
 #define CONFIG_H
 
