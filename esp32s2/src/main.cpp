@@ -1,3 +1,26 @@
+// ...existing code...
+
+#include "hal.h"
+#include "config.h"
+
+// --- Modern rounded rectangle helper ---
+// Auto-clamps radius so corners never overflow the rect.
+static void fillRoundRect(int x, int y, int w, int h, int r, HalColor c) {
+    if (w <= 0 || h <= 0) return;
+    if (r > w / 2) r = w / 2;
+    if (r > h / 2) r = h / 2;
+    if (r < 1) { hal_fillRect(x, y, w, h, c); return; }
+    // Center band
+    hal_fillRect(x + r, y, w - 2 * r, h, c);
+    // Left / right bands (between corners)
+    hal_fillRect(x, y + r, r, h - 2 * r, c);
+    hal_fillRect(x + w - r, y + r, r, h - 2 * r, c);
+    // Four corner circles
+    hal_fillCircle(x + r,         y + r,         r, c);
+    hal_fillCircle(x + w - r - 1, y + r,         r, c);
+    hal_fillCircle(x + r,         y + h - r - 1, r, c);
+    hal_fillCircle(x + w - r - 1, y + h - r - 1, r, c);
+}
 // Syrup Touch Mixer — Shared Application Logic
 // Uses hal.h for all hardware access.
 // Compiled for both ESP32-S2 (real) and native (SDL2 simulator).
@@ -549,18 +572,18 @@ static void drawPouringLayout(int mixId, int totalMotors, bool paused) {
     }
     hal_drawString(titleBuf, 160, 8, 2);
 
-    // Overall progress bar outline
-    const int barX = 20, barY = 52, barW = 280, barH = 24;
-    hal_drawRect(barX, barY, barW, barH, COL_WHITE);
+    // Overall progress bar track (modern filled, no outline)
+    const int barX = 20, barY = 52, barW = 280, barH = 24, barR = 12;
+    fillRoundRect(barX, barY, barW, barH, barR, hal_color(40, 40, 50));
 
     // Separator
     hal_drawHLine(20, 108, 280, COL_GRAY);
 
-    // Motor bar outlines
+    // Motor bar tracks (modern filled, no outline)
     for (int i = 0; i < MAX_CONCURRENT; i++) {
         int yBase = 140 + i * 24;
-        const int mbX = 100, mbW = 200, mbH = 10;
-        hal_drawRect(mbX, yBase - 5, mbW, mbH, COL_LIGHT_GRAY);
+        const int mbX = 100, mbW = 200, mbH = 10, mbR = 5;
+        fillRoundRect(mbX, yBase - 5, mbW, mbH, mbR, hal_color(40, 40, 50));
     }
 
     // STOP button
@@ -601,12 +624,13 @@ static void updatePouringScreen(int mixId,
     char pctStr[24]; snprintf(pctStr, sizeof(pctStr), "Overall  %d%%", pct);
     hal_drawString(pctStr, 160, 32, 2);
 
-    // Overall progress bar fill
-    const int barX = 20, barY = 52, barW = 280, barH = 24;
+    // Overall progress bar fill (rounded, inside track)
+    const int barX = 20, barY = 52, barW = 280, barH = 24, barR = 12;
     int fillW = (int)(barW * overallFrac);
-    hal_fillRect(barX + 1, barY + 1, barW - 2, barH - 2, COL_DARK_BLUE);
+    // Clear track, then draw fill — radius auto-clamps for small fills
+    fillRoundRect(barX, barY, barW, barH, barR, hal_color(40, 40, 50));
     if (fillW > 0)
-        hal_fillRect(barX + 1, barY + 1, fillW - 1, barH - 2, COL_CYAN_BAR);
+        fillRoundRect(barX, barY, fillW, barH, barR, COL_CYAN_BAR);
 
     // Volume text
     hal_setTextDatum(HAL_DATUM_MC);
@@ -631,12 +655,13 @@ static void updatePouringScreen(int mixId,
     snprintf(activeStr, sizeof(activeStr), "Active motors (%d/%d total)", mCount, totalMotors);
     hal_drawString(activeStr, 160, 120, 1);
 
-    // Per-motor progress bars
+    // Per-motor progress bars (rounded, inside track)
     for (int i = 0; i < MAX_CONCURRENT; i++) {
         int yBase = 140 + i * 24;
-        const int mbX = 100, mbW = 200, mbH = 10;
+        const int mbX = 100, mbW = 200, mbH = 10, mbR = 5;
         hal_fillRect(0, yBase - 8, 98, 16, COL_DARK_BLUE);
-        hal_fillRect(mbX + 1, yBase - 4, mbW - 2, mbH - 2, COL_DARK_BLUE);
+        // Clear track then draw fill — radius auto-clamps
+        fillRoundRect(mbX, yBase - 5, mbW, mbH, mbR, hal_color(40, 40, 50));
 
         if (i < mCount) {
             char label[16];
@@ -647,7 +672,7 @@ static void updatePouringScreen(int mixId,
 
             int mfW = mbW * mDisp[i].fracPercent / 100;
             if (mfW > 0)
-                hal_fillRect(mbX + 1, yBase - 4, mfW - 1, mbH - 2, COL_GREEN_BAR);
+                fillRoundRect(mbX, yBase - 5, mfW, mbH, mbR, COL_GREEN_BAR);
         }
     }
 }
