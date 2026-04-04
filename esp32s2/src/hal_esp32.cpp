@@ -9,6 +9,8 @@
 #include <Arduino.h>
 #include <TFT_eSPI.h>
 #include <LittleFS.h>
+#include <WiFi.h>
+#include <WebServer.h>
 
 // ============================================
 // DISPLAY
@@ -200,6 +202,109 @@ void hal_buzzerOff() {
 
 void hal_pumpEvents() { /* no-op on ESP32 */ }
 bool hal_shouldQuit() { return false; }
+
+// ============================================
+// WIFI AP + WEB SERVER
+// ============================================
+static WebServer *webServer = nullptr;
+static bool wifiActive = false;
+static bool mixesUpdatedFlag = false;
+
+static void handleGetMixes() {
+    char buf[4096];
+    int n = hal_readFile("/syrup_mixes.json", buf, sizeof(buf));
+    if (n <= 0) {
+        webServer->send(200, "application/json", "{}");
+    } else {
+        webServer->send(200, "application/json", buf);
+    }
+}
+
+static void handlePostMixes() {
+    if (!webServer->hasArg("plain")) {
+        webServer->send(400, "application/json", "{\"error\":\"no body\"}");
+        return;
+    }
+    String body = webServer->arg("plain");
+    if (body.length() > 4000) {
+        webServer->send(413, "application/json", "{\"error\":\"too large\"}");
+        return;
+    }
+    if (hal_writeFile("/syrup_mixes.json", body.c_str(), body.length())) {
+        mixesUpdatedFlag = true;
+        webServer->send(200, "application/json", "{\"ok\":true}");
+    } else {
+        webServer->send(500, "application/json", "{\"error\":\"write failed\"}");
+    }
+}
+
+static void handleIndex() {
+    File f = LittleFS.open("/index.html", "r");
+    if (!f) {
+        webServer->send(404, "text/plain", "index.html not found");
+        return;
+    }
+    webServer->streamFile(f, "text/html");
+    f.close();
+}
+
+bool hal_wifiStart() {
+    if (wifiActive) return true;
+
+    WiFi.mode(WIFI_AP);
+    bool ok;
+    if (strlen(WIFI_AP_PASS) >= 8) {
+        ok = WiFi.softAP(WIFI_AP_SSID, WIFI_AP_PASS);
+    } else {
+        ok = WiFi.softAP(WIFI_AP_SSID);
+    }
+    if (!ok) {
+        hal_log("WiFi AP start failed");
+        return false;
+    }
+
+    webServer = new WebServer(80);
+    webServer->on("/", HTTP_GET, handleIndex);
+    webServer->on("/api/mixes", HTTP_GET, handleGetMixes);
+    webServer->on("/api/mixes", HTTP_POST, handlePostMixes);
+    webServer->begin();
+
+    wifiActive = true;
+    char msg[80];
+    snprintf(msg, sizeof(msg), "WiFi AP started: %s @ %s",
+             WIFI_AP_SSID, WiFi.softAPIP().toString().c_str());
+    hal_log(msg);
+    return true;
+}
+
+void hal_wifiStop() {
+    if (!wifiActive) return;
+    if (webServer) {
+        webServer->stop();
+        delete webServer;
+        webServer = nullptr;
+    }
+    WiFi.softAPdisconnect(true);
+    WiFi.mode(WIFI_OFF);
+    wifiActive = false;
+    hal_log("WiFi AP stopped");
+}
+
+bool hal_wifiIsActive() { return wifiActive; }
+
+void hal_wifiProcess() {
+    if (wifiActive && webServer) {
+        webServer->handleClient();
+    }
+}
+
+bool hal_wifiMixesUpdated() {
+    if (mixesUpdatedFlag) {
+        mixesUpdatedFlag = false;
+        return true;
+    }
+    return false;
+}
 
 // ============================================
 // ARDUINO ENTRY POINTS → app_setup / app_loop

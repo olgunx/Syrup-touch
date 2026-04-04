@@ -71,4 +71,10 @@ constexpr int SECRET_CODE[4] = {4, 7, 2, 5};
 // ============================================
 constexpr uint8_t BUZZER_PIN = 40;
 
+// ============================================
+// WIFI ACCESS POINT
+// ============================================
+constexpr const char *WIFI_AP_SSID = "SyrupTouch";
+constexpr const char *WIFI_AP_PASS = "syrup1234";  // min 8 chars; set "" for open
+
 #endif

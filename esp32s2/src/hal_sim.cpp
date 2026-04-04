@@ -425,6 +425,15 @@ void hal_pumpEvents() {
 bool hal_shouldQuit() { return gQuit; }
 
 // ============================================
+// WIFI — stubs (no WiFi on simulator)
+// ============================================
+bool hal_wifiStart()       { printf("[SIM] WiFi start (no-op)\n"); return false; }
+void hal_wifiStop()        { }
+bool hal_wifiIsActive()    { return false; }
+void hal_wifiProcess()     { }
+bool hal_wifiMixesUpdated(){ return false; }
+
+// ============================================
 // MAIN — simulator entry point
 // ============================================
 int main(int argc, char *argv[]) {

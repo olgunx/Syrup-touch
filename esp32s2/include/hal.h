@@ -114,4 +114,23 @@ void hal_pumpEvents();
 // On ESP32 this always returns false.
 bool hal_shouldQuit();
 
+// ============================================
+// WIFI / WEB SERVER
+// ============================================
+// Start WiFi AP and web server for mix configuration.
+// Returns true on success.
+bool hal_wifiStart();
+
+// Stop WiFi AP and web server.
+void hal_wifiStop();
+
+// Returns true if WiFi AP is currently active.
+bool hal_wifiIsActive();
+
+// Must be called from the main loop to handle incoming HTTP requests.
+void hal_wifiProcess();
+
+// Returns true if mix data was updated via web interface (and clears the flag).
+bool hal_wifiMixesUpdated();
+
 #endif // HAL_H

@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Syrup Touch Mixer</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+background:#1a1a2e;color:#e0e0e0;padding:12px;max-width:600px;margin:0 auto}
+h1{text-align:center;color:#00d4aa;margin:12px 0 16px;font-size:1.4em}
+.mix{background:#16213e;border-radius:10px;margin-bottom:12px;padding:14px;
+border:1px solid #0f3460}
+.mix-header{display:flex;justify-content:space-between;align-items:center;
+margin-bottom:10px}
+.mix-num{font-weight:700;font-size:1.1em;color:#00d4aa}
+.mix-name{display:flex;gap:6px}
+.mix-name input{background:#0f3460;border:1px solid #1a4080;border-radius:6px;
+color:#e0e0e0;padding:4px 8px;width:100px;font-size:0.9em}
+.syrups{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.syrup{display:flex;flex-direction:column;align-items:center}
+.syrup label{font-size:0.75em;color:#8892b0;margin-bottom:2px}
+.syrup input{width:100%;background:#0f3460;border:1px solid #1a4080;
+border-radius:6px;color:#e0e0e0;text-align:center;padding:6px 2px;font-size:1em}
+.syrup input:focus{border-color:#00d4aa;outline:none}
+.btn-row{display:flex;gap:10px;justify-content:center;margin-top:16px}
+.btn{padding:12px 32px;border:none;border-radius:8px;font-size:1em;
+font-weight:600;cursor:pointer;transition:opacity .2s}
+.btn:active{opacity:.7}
+.btn-save{background:#00d4aa;color:#1a1a2e}
+.btn-reload{background:#0f3460;color:#e0e0e0;border:1px solid #1a4080}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+background:#00d4aa;color:#1a1a2e;padding:10px 24px;border-radius:8px;
+font-weight:600;display:none;z-index:99}
+</style>
+</head>
+<body>
+<h1>&#9749; Syrup Touch Mixer</h1>
+<div id="mixes"></div>
+<div class="btn-row">
+<button class="btn btn-reload" onclick="load()">Reload</button>
+<button class="btn btn-save" onclick="save()">Save All</button>
+</div>
+<div id="toast" class="toast"></div>
+<script>
+let data={};
+function toast(msg,ms){
+  const t=document.getElementById('toast');
+  t.textContent=msg;t.style.display='block';
+  setTimeout(()=>t.style.display='none',ms||2000);
+}
+function render(){
+  const c=document.getElementById('mixes');c.innerHTML='';
+  for(let m=1;m<=9;m++){
+    const mix=data[String(m)]||{};
+    const d=document.createElement('div');d.className='mix';
+    const n1=mix.name?mix.name[0]:'';
+    const n2=mix.name?mix.name[1]:'';
+    let h=`<div class="mix-header"><span class="mix-num">Mix ${m}</span>
+      <div class="mix-name">
+        <input id="n${m}_0" value="${esc(n1)}" placeholder="Line 1" maxlength="16">
+        <input id="n${m}_1" value="${esc(n2)}" placeholder="Line 2" maxlength="16">
+      </div></div><div class="syrups">`;
+    for(let s=1;s<=8;s++){
+      const v=mix['syrup_'+s]||0;
+      h+=`<div class="syrup"><label>S${s}</label>
+        <input type="number" id="s${m}_${s}" value="${v}" min="0" max="10"></div>`;
+    }
+    h+='</div>';d.innerHTML=h;c.appendChild(d);
+  }
+}
+function esc(s){return s?s.replace(/"/g,'&quot;').replace(/</g,'&lt;'):''}
+function gather(){
+  for(let m=1;m<=9;m++){
+    if(!data[String(m)])data[String(m)]={};
+    const mix=data[String(m)];
+    for(let s=1;s<=8;s++){
+      const el=document.getElementById('s'+m+'_'+s);
+      mix['syrup_'+s]=el?Math.max(0,Math.min(10,parseInt(el.value)||0)):0;
+    }
+    mix.name=[
+      (document.getElementById('n'+m+'_0')||{}).value||'',
+      (document.getElementById('n'+m+'_1')||{}).value||''
+    ];
+  }
+}
+function load(){
+  fetch('/api/mixes').then(r=>r.json()).then(j=>{data=j;render();toast('Loaded');})
+  .catch(()=>toast('Load failed!'));
+}
+function save(){
+  gather();
+  fetch('/api/mixes',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify(data)})
+  .then(r=>{if(!r.ok)throw 0;return r.json()})
+  .then(()=>toast('Saved!'))
+  .catch(()=>toast('Save failed!'));
+}
+load();
+</script>
+</body>
+</html>
