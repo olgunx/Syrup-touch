@@ -634,7 +634,7 @@ static void updatePouringScreen(int mixId,
 
     // Volume text
     hal_setTextDatum(HAL_DATUM_MC);
-    char volStr[24]; snprintf(volStr, sizeof(volStr), "%.1f/%.0f ml", overallDone, overallTotal);
+    char volStr[24]; snprintf(volStr, sizeof(volStr), "%.1f/%.0f ml", overallDone * 10.0f, overallTotal * 10.0f);
     hal_setTextColor(COL_WHITE);
     hal_drawString(volStr, 160, barY + barH / 2, 1);
 
@@ -704,7 +704,7 @@ static void drawSummaryScreen(int mixId, PourStatus status,
     hal_drawString(buf, 160, 110, 2);
     snprintf(buf, sizeof(buf), "Motors: %d", motorsUsed);
     hal_drawString(buf, 160, 140, 2);
-    snprintf(buf, sizeof(buf), "Volume: %d ml", totalUnits);
+    snprintf(buf, sizeof(buf), "Volume: %d ml", totalUnits * 10);
     hal_drawString(buf, 160, 170, 2);
 
     // OK button

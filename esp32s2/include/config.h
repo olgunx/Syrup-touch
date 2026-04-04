@@ -51,7 +51,7 @@ constexpr MotorPins MOTOR_PINS[8] = {
 // ============================================
 // POUR TIMING
 // ============================================
-constexpr float SECONDS_PER_UNIT = 10.0f;  // pour time per ml unit
+constexpr float SECONDS_PER_UNIT = 5.5556f;  // pour time per 10ml unit (measured: 18ml in 10s)
 constexpr int   STAGGER_DELAY_MS = 500;    // inrush-current stagger between motor starts
 constexpr int   MAX_CONCURRENT   = 2;      // max motors running at once
 
