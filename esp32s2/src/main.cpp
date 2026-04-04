@@ -32,6 +32,7 @@ static void fillRoundRect(int x, int y, int w, int h, int r, HalColor c) {
 #include <cstring>
 #include <cstdarg>
 #include <cstdlib>
+#include <cmath>
 
 // ============================================
 // APPLICATION STATE
@@ -538,22 +539,22 @@ static void drawViewMix(int mixId, const char *activeButton = nullptr) {
         hal_drawString(right, 240, y, 2);
     }
 
-    // BACK button
+    // BACK button (moved up by 10px)
     HalColor backCol = (activeButton && strcmp(activeButton, "BACK") == 0)
                        ? COL_LIGHT_RED : COL_DARK_RED;
-    hal_fillRect(10, 180, 140, 45, backCol);
-    hal_drawRect(10, 180, 140, 45, COL_WHITE);
+    hal_fillRect(10, 170, 140, 45, backCol);
+    hal_drawRect(10, 170, 140, 45, COL_WHITE);
     hal_setTextDatum(HAL_DATUM_MC);
     hal_setTextColor(COL_WHITE, backCol);
-    hal_drawString("BACK", 80, 202, 4);
+    hal_drawString("BACK", 80, 192, 4);
 
-    // POUR button
+    // POUR button (moved up by 10px)
     HalColor pourCol = (activeButton && strcmp(activeButton, "POUR") == 0)
                        ? COL_LIGHT_GREEN : COL_DARK_GREEN;
-    hal_fillRect(170, 180, 140, 45, pourCol);
-    hal_drawRect(170, 180, 140, 45, COL_WHITE);
+    hal_fillRect(170, 170, 140, 45, pourCol);
+    hal_drawRect(170, 170, 140, 45, COL_WHITE);
     hal_setTextColor(COL_WHITE, pourCol);
-    hal_drawString("POUR", 240, 202, 4);
+    hal_drawString("POUR", 240, 192, 4);
 }
 
 // --- Pouring progress screen: static layout (call once) ---
@@ -572,22 +573,23 @@ static void drawPouringLayout(int mixId, int totalMotors, bool paused) {
     }
     hal_drawString(titleBuf, 160, 8, 2);
 
-    // Overall progress bar track (modern filled, no outline)
-    const int barX = 20, barY = 52, barW = 280, barH = 24, barR = 12;
-    fillRoundRect(barX, barY, barW, barH, barR, hal_color(40, 40, 50));
+    // Overall progress bar track (flat rectangle, no outline)
+    const int barX = 20, barY = 52, barW = 280, barH = 24;
+    hal_fillRect(barX, barY, barW, barH, hal_color(40, 40, 50));
 
     // Separator
     hal_drawHLine(20, 108, 280, COL_GRAY);
 
-    // Motor bar tracks (modern filled, no outline)
+    // Motor bar tracks (flat rectangles, no outline)
     for (int i = 0; i < MAX_CONCURRENT; i++) {
         int yBase = 140 + i * 24;
-        const int mbX = 100, mbW = 200, mbH = 10, mbR = 5;
-        fillRoundRect(mbX, yBase - 5, mbW, mbH, mbR, hal_color(40, 40, 50));
+        const int mbX = 100, mbW = 200, mbH = 10;
+        hal_fillRect(mbX, yBase - 5, mbW, mbH, hal_color(40, 40, 50));
     }
 
-    // STOP button
-    const int btnY = 200, btnH = 36;
+    // STOP and PAUSE/RESUME buttons (height increased by 20%, grows upward, moved up 10px)
+    const int btnH = int(36 * 1.2); // 43
+    const int btnY = 200 + 36 - btnH - 10; // Move up by 10px
     hal_fillRect(20, btnY, 138, btnH, COL_STOP);
     hal_drawRect(20, btnY, 138, btnH, hal_color(255, 100, 100));
     hal_setTextDatum(HAL_DATUM_MC);
@@ -624,13 +626,16 @@ static void updatePouringScreen(int mixId,
     char pctStr[24]; snprintf(pctStr, sizeof(pctStr), "Overall  %d%%", pct);
     hal_drawString(pctStr, 160, 32, 2);
 
-    // Overall progress bar fill (rounded, inside track)
-    const int barX = 20, barY = 52, barW = 280, barH = 24, barR = 12;
-    int fillW = (int)(barW * overallFrac);
-    // Clear track, then draw fill — radius auto-clamps for small fills
-    fillRoundRect(barX, barY, barW, barH, barR, hal_color(40, 40, 50));
-    if (fillW > 0)
-        fillRoundRect(barX, barY, fillW, barH, barR, COL_CYAN_BAR);
+    // Overall progress bar fill (flat rectangle, no rounded corners)
+    const int barX = 20, barY = 52, barW = 280, barH = 24;
+    int fillW = (int)roundf(barW * overallFrac);
+    // Draw background as flat rectangle
+    hal_fillRect(barX, barY, barW, barH, hal_color(40, 40, 50));
+    // Draw fill as flat rectangle
+    if (fillW > 0) {
+        int minFill = (overallFrac > 0 && fillW < 2) ? 2 : fillW;
+        hal_fillRect(barX, barY, minFill, barH, COL_CYAN_BAR);
+    }
 
     // Volume text
     hal_setTextDatum(HAL_DATUM_MC);
@@ -655,13 +660,13 @@ static void updatePouringScreen(int mixId,
     snprintf(activeStr, sizeof(activeStr), "Active motors (%d/%d total)", mCount, totalMotors);
     hal_drawString(activeStr, 160, 120, 1);
 
-    // Per-motor progress bars (rounded, inside track)
+    // Per-motor progress bars (flat rectangles, no rounded corners)
     for (int i = 0; i < MAX_CONCURRENT; i++) {
         int yBase = 140 + i * 24;
-        const int mbX = 100, mbW = 200, mbH = 10, mbR = 5;
+        const int mbX = 100, mbW = 200, mbH = 10;
         hal_fillRect(0, yBase - 8, 98, 16, COL_DARK_BLUE);
-        // Clear track then draw fill — radius auto-clamps
-        fillRoundRect(mbX, yBase - 5, mbW, mbH, mbR, hal_color(40, 40, 50));
+        // Draw background as flat rectangle
+        hal_fillRect(mbX, yBase - 5, mbW, mbH, hal_color(40, 40, 50));
 
         if (i < mCount) {
             char label[16];
@@ -672,7 +677,7 @@ static void updatePouringScreen(int mixId,
 
             int mfW = mbW * mDisp[i].fracPercent / 100;
             if (mfW > 0)
-                fillRoundRect(mbX, yBase - 5, mfW, mbH, mbR, COL_GREEN_BAR);
+                hal_fillRect(mbX, yBase - 5, mfW, mbH, COL_GREEN_BAR);
         }
     }
 }
