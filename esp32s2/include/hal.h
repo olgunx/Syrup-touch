@@ -133,4 +133,8 @@ void hal_wifiProcess();
 // Returns true if mix data was updated via web interface (and clears the flag).
 bool hal_wifiMixesUpdated();
 
+// Get current WiFi SSID and password (from persistent config or defaults).
+const char* hal_wifiGetSSID();
+const char* hal_wifiGetPass();
+
 #endif // HAL_H

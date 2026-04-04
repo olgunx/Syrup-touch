@@ -32,10 +32,29 @@ font-weight:600;cursor:pointer;transition:opacity .2s}
 .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
 background:#00d4aa;color:#1a1a2e;padding:10px 24px;border-radius:8px;
 font-weight:600;display:none;z-index:99}
+.wifi-section{background:#16213e;border-radius:10px;margin-bottom:16px;padding:14px;
+border:1px solid #0f3460}
+.wifi-section h2{font-size:1em;color:#00d4aa;margin-bottom:10px}
+.wifi-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.wifi-row label{width:70px;font-size:0.9em;color:#8892b0}
+.wifi-row input{flex:1;background:#0f3460;border:1px solid #1a4080;border-radius:6px;
+color:#e0e0e0;padding:6px 10px;font-size:0.95em}
+.wifi-row input:focus{border-color:#00d4aa;outline:none}
+.btn-wifi{background:#e67e22;color:#fff;padding:8px 20px;border:none;border-radius:6px;
+font-weight:600;cursor:pointer;font-size:0.9em;margin-top:4px}
+.btn-wifi:active{opacity:.7}
+.wifi-note{font-size:0.78em;color:#8892b0;margin-top:6px}
 </style>
 </head>
 <body>
 <h1>&#9749; Syrup Touch Mixer</h1>
+<div class="wifi-section">
+<h2>&#128246; WiFi Settings</h2>
+<div class="wifi-row"><label>SSID</label><input id="wifiSSID" maxlength="32" placeholder="Network name"></div>
+<div class="wifi-row"><label>Password</label><input id="wifiPass" maxlength="63" placeholder="Min 8 chars or empty for open"></div>
+<button class="btn-wifi" onclick="saveWifi()">Save WiFi</button>
+<div class="wifi-note">Changes take effect after WiFi is toggled off/on from the device.</div>
+</div>
 <div id="mixes"></div>
 <div class="btn-row">
 <button class="btn btn-reload" onclick="load()">Reload</button>
@@ -97,6 +116,24 @@ function save(){
   .catch(()=>toast('Save failed!'));
 }
 load();
+function loadWifi(){
+  fetch('/api/wifi').then(r=>r.json()).then(j=>{
+    document.getElementById('wifiSSID').value=j.ssid||'';
+    document.getElementById('wifiPass').value=j.pass||'';
+  }).catch(()=>{});
+}
+function saveWifi(){
+  const ssid=document.getElementById('wifiSSID').value.trim();
+  const pass=document.getElementById('wifiPass').value;
+  if(!ssid){toast('SSID is required');return;}
+  if(pass.length>0&&pass.length<8){toast('Password must be 8+ chars or empty');return;}
+  fetch('/api/wifi',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({ssid:ssid,pass:pass})})
+  .then(r=>r.json())
+  .then(j=>{if(j.ok)toast('WiFi saved! Toggle WiFi off/on to apply.');else toast(j.error||'Failed');})
+  .catch(()=>toast('Save failed!'));
+}
+loadWifi();
 </script>
 </body>
 </html>

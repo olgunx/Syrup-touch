@@ -212,6 +212,49 @@ static DNSServer *dnsServer = nullptr;
 static bool wifiActive = false;
 static bool mixesUpdatedFlag = false;
 
+// Runtime WiFi config (loaded from LittleFS, falls back to config.h defaults)
+static char wifiSSID[33] = {};
+static char wifiPass[65] = {};
+
+static void loadWifiConfig() {
+    char buf[256];
+    int n = hal_readFile("/wifi_config.json", buf, sizeof(buf));
+    if (n <= 0) {
+        strncpy(wifiSSID, WIFI_AP_SSID, sizeof(wifiSSID) - 1);
+        strncpy(wifiPass, WIFI_AP_PASS, sizeof(wifiPass) - 1);
+        return;
+    }
+    // Minimal JSON parse for {"ssid":"...","pass":"..."}
+    auto extract = [&](const char *key, char *dst, size_t dstSz) {
+        char needle[40];
+        snprintf(needle, sizeof(needle), "\"%s\":\"", key);
+        const char *p = strstr(buf, needle);
+        if (!p) return;
+        p += strlen(needle);
+        const char *end = strchr(p, '"');
+        if (!end) return;
+        size_t len = end - p;
+        if (len >= dstSz) len = dstSz - 1;
+        memcpy(dst, p, len);
+        dst[len] = '\0';
+    };
+    wifiSSID[0] = '\0';
+    wifiPass[0] = '\0';
+    extract("ssid", wifiSSID, sizeof(wifiSSID));
+    extract("pass", wifiPass, sizeof(wifiPass));
+    if (wifiSSID[0] == '\0') strncpy(wifiSSID, WIFI_AP_SSID, sizeof(wifiSSID) - 1);
+    if (wifiPass[0] == '\0') strncpy(wifiPass, WIFI_AP_PASS, sizeof(wifiPass) - 1);
+}
+
+static bool saveWifiConfig() {
+    char buf[160];
+    int len = snprintf(buf, sizeof(buf), "{\"ssid\":\"%s\",\"pass\":\"%s\"}", wifiSSID, wifiPass);
+    return hal_writeFile("/wifi_config.json", buf, len);
+}
+
+const char* hal_wifiGetSSID() { return wifiSSID; }
+const char* hal_wifiGetPass() { return wifiPass; }
+
 static void handleGetMixes() {
     char buf[4096];
     int n = hal_readFile("/syrup_mixes.json", buf, sizeof(buf));
@@ -256,15 +299,66 @@ static void handleCaptivePortal() {
     webServer->send(302, "text/plain", "");
 }
 
+static void handleGetWifi() {
+    char buf[160];
+    snprintf(buf, sizeof(buf), "{\"ssid\":\"%s\",\"pass\":\"%s\"}", wifiSSID, wifiPass);
+    webServer->send(200, "application/json", buf);
+}
+
+static void handlePostWifi() {
+    if (!webServer->hasArg("plain")) {
+        webServer->send(400, "application/json", "{\"error\":\"no body\"}");
+        return;
+    }
+    String body = webServer->arg("plain");
+    if (body.length() > 200) {
+        webServer->send(413, "application/json", "{\"error\":\"too large\"}");
+        return;
+    }
+    // Parse ssid and pass from JSON
+    char newSSID[33] = {}, newPass[65] = {};
+    auto extract = [&](const char *src, const char *key, char *dst, size_t dstSz) {
+        char needle[40];
+        snprintf(needle, sizeof(needle), "\"%s\":\"", key);
+        const char *p = strstr(src, needle);
+        if (!p) return;
+        p += strlen(needle);
+        const char *end = strchr(p, '"');
+        if (!end) return;
+        size_t len = end - p;
+        if (len >= dstSz) len = dstSz - 1;
+        memcpy(dst, p, len);
+        dst[len] = '\0';
+    };
+    extract(body.c_str(), "ssid", newSSID, sizeof(newSSID));
+    extract(body.c_str(), "pass", newPass, sizeof(newPass));
+    if (newSSID[0] == '\0') {
+        webServer->send(400, "application/json", "{\"error\":\"ssid required\"}");
+        return;
+    }
+    if (strlen(newPass) > 0 && strlen(newPass) < 8) {
+        webServer->send(400, "application/json", "{\"error\":\"password must be 8+ chars or empty\"}");
+        return;
+    }
+    strncpy(wifiSSID, newSSID, sizeof(wifiSSID) - 1);
+    strncpy(wifiPass, newPass, sizeof(wifiPass) - 1);
+    if (saveWifiConfig()) {
+        webServer->send(200, "application/json", "{\"ok\":true,\"restart\":true}");
+        hal_log("WiFi config saved — restart AP to apply");
+    } else {
+        webServer->send(500, "application/json", "{\"error\":\"write failed\"}");
+    }
+}
+
 bool hal_wifiStart() {
     if (wifiActive) return true;
 
     WiFi.mode(WIFI_AP);
     bool ok;
-    if (strlen(WIFI_AP_PASS) >= 8) {
-        ok = WiFi.softAP(WIFI_AP_SSID, WIFI_AP_PASS);
+    if (strlen(wifiPass) >= 8) {
+        ok = WiFi.softAP(wifiSSID, wifiPass);
     } else {
-        ok = WiFi.softAP(WIFI_AP_SSID);
+        ok = WiFi.softAP(wifiSSID);
     }
     if (!ok) {
         hal_log("WiFi AP start failed");
@@ -275,6 +369,8 @@ bool hal_wifiStart() {
     webServer->on("/", HTTP_GET, handleIndex);
     webServer->on("/api/mixes", HTTP_GET, handleGetMixes);
     webServer->on("/api/mixes", HTTP_POST, handlePostMixes);
+    webServer->on("/api/wifi", HTTP_GET, handleGetWifi);
+    webServer->on("/api/wifi", HTTP_POST, handlePostWifi);
     // Captive portal detection endpoints
     webServer->on("/generate_204", HTTP_GET, handleCaptivePortal);     // Android
     webServer->on("/gen_204", HTTP_GET, handleCaptivePortal);           // Android
@@ -293,7 +389,7 @@ bool hal_wifiStart() {
     wifiActive = true;
     char msg[80];
     snprintf(msg, sizeof(msg), "WiFi AP started: %s @ %s",
-             WIFI_AP_SSID, WiFi.softAPIP().toString().c_str());
+             wifiSSID, WiFi.softAPIP().toString().c_str());
     hal_log(msg);
     return true;
 }
@@ -358,6 +454,9 @@ void setup() {
     if (!LittleFS.begin(true)) {
         Serial.println("LittleFS mount failed!");
     }
+
+    // Load WiFi config from LittleFS (or use defaults from config.h)
+    loadWifiConfig();
 
     // LED
     pinMode(LED_PIN, OUTPUT);

@@ -60,7 +60,8 @@ esp32s2/
 │   ├── hal_esp32.cpp      # ESP32 HAL: TFT_eSPI, GPIO, LittleFS
 │   └── hal_sim.cpp        # Simulator HAL: SDL2 + SDL_ttf, mouse, filesystem
 ├── data/
-│   └── syrup_mixes.json   # Mix recipe data (shared by both targets)
+│   ├── syrup_mixes.json   # Mix recipe data (shared by both targets)
+│   └── index.html         # Web config page (served over WiFi AP)
 └── platformio.ini         # Build config for both environments
 ```
 
@@ -186,14 +187,20 @@ Recipe data is stored in `data/syrup_mixes.json` (9 mixes × 8 channels, auto-cr
 
 ### WiFi Web Interface
 
-Mix recipes can also be edited from a phone or laptop over WiFi:
+Mix recipes and WiFi settings can be edited from a phone or laptop over WiFi:
 
-1. **Tap the circle icon** in the top-right corner of the status bar (turns green when active)
-2. Connect your phone to WiFi network **SyrupTouch** (password: `syrup1234`)
-3. Open a browser and go to **http://192.168.4.1**
-4. Edit mix names and syrup values, then tap **Save All**
-5. The device auto-reloads the updated recipes
-6. Tap the icon again to turn WiFi off
+1. Enter the config screen by tapping the passcode **4 → 7 → 2 → 5** on the main menu
+2. **Tap the WiFi button** in the thicker status bar at the top (turns green when active)
+   — alternatively, tap the circle icon in the main menu status bar
+3. Connect your phone to WiFi network **SyrupTouch** (password: `syrup1234`)
+4. A captive portal auto-opens the config page; or browse to **http://192.168.4.1**
+5. **Mix recipes:** Edit names and syrup values, then tap **Save All** — the device auto-reloads
+6. **WiFi settings:** Change the SSID and password from the top of the page, then tap **Save WiFi**
+   — toggle WiFi off/on from the device to apply the new credentials
+7. The config screen status bar shows the current SSID and password
+8. Tap the WiFi button again to turn WiFi off
+
+> **Note:** WiFi credentials are stored persistently in `/wifi_config.json` on the device. If the file is missing or empty, the defaults from `config.h` are used.
 
 ## Turkish Character Support
 

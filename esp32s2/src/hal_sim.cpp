@@ -432,6 +432,8 @@ void hal_wifiStop()        { }
 bool hal_wifiIsActive()    { return false; }
 void hal_wifiProcess()     { }
 bool hal_wifiMixesUpdated(){ return false; }
+const char* hal_wifiGetSSID() { return "SyrupTouch"; }
+const char* hal_wifiGetPass() { return "syrup1234"; }
 
 // ============================================
 // MAIN — simulator entry point

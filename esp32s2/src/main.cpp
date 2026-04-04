@@ -74,6 +74,11 @@ const int GAP      = 3;      // gap between cells
 const int BOX_W    = SCREEN_W / 3;   // 106 — grid math unchanged for touch mapping
 const int BOX_H    = GRID_H / 3;     // ~73
 
+// Config screen (SELECT_MIX) has a thicker status bar with WiFi button
+static const int CONFIG_STATUS_H = 36;
+static const int CFG_BOX_H = (SCREEN_H - CONFIG_STATUS_H) / 3;
+static const int CFG_WIFI_BTN_X = 110;
+
 HalColor gridColors[3][3];
 
 // Per-mix color palette (muted, distinct, pleasant)
@@ -444,14 +449,55 @@ static void drawGridCell(int row, int col, HalColor color, bool pressed = false)
         hal_drawString_Turkish(mixNames[num - 1][1], name_cx, name_cy + name_offset, FONT_SIZE_BOXNAME);
 }
 
+// --- Config screen status bar (thicker, with WiFi button) ---
+static void drawConfigStatusBar() {
+    HalColor barBg = hal_color(30, 20, 40);
+    hal_fillRect(0, 0, SCREEN_W, CONFIG_STATUS_H, barBg);
+    hal_drawHLine(0, CONFIG_STATUS_H - 1, SCREEN_W, COL_GRAY);
+
+    // "SELECT MIX" label
+    hal_setTextDatum(HAL_DATUM_ML);
+    hal_setTextColor(hal_color(200, 180, 220), barBg);
+    hal_drawString("SELECT MIX", 6, CONFIG_STATUS_H / 2, 2);
+
+    // WiFi toggle button (rounded rect)
+    bool on = hal_wifiIsActive();
+    int btnX = CFG_WIFI_BTN_X, btnY = 4, btnW = SCREEN_W - CFG_WIFI_BTN_X - 4, btnH = CONFIG_STATUS_H - 8;
+    HalColor btnBg = on ? hal_color(0, 100, 70) : hal_color(55, 55, 65);
+    fillRoundRect(btnX, btnY, btnW, btnH, 6, btnBg);
+
+    // Indicator dot
+    int dotX = btnX + 14, dotY = btnY + btnH / 2;
+    if (on) {
+        hal_fillCircle(dotX, dotY, 5, hal_color(0, 230, 160));
+    } else {
+        hal_drawCircle(dotX, dotY, 5, hal_color(140, 140, 150));
+    }
+
+    // Status text + SSID/password
+    hal_setTextDatum(HAL_DATUM_ML);
+    if (on) {
+        hal_setTextColor(COL_WHITE, btnBg);
+        hal_drawString("WiFi ON", dotX + 10, dotY - 6, 1);
+        // SSID and password side by side
+        char info[64];
+        snprintf(info, sizeof(info), "%s  pw:%s", hal_wifiGetSSID(), hal_wifiGetPass());
+        hal_setTextColor(hal_color(200, 200, 120), btnBg);
+        hal_drawString(info, dotX + 10, dotY + 7, 1);
+    } else {
+        hal_setTextColor(hal_color(160, 160, 170), btnBg);
+        hal_drawString("WiFi OFF", dotX + 10, dotY, 1);
+    }
+}
+
 // --- Draw a single grid cell for select-mix mode (purple tinted) ---
 static void drawSelectCell(int row, int col, HalColor color) {
     int num = row * 3 + col + 1;
 
     int x1 = col * BOX_W + GAP;
-    int y1 = GRID_Y + row * BOX_H + GAP;
+    int y1 = CONFIG_STATUS_H + row * CFG_BOX_H + GAP;
     int cw = BOX_W - GAP * 2;
-    int ch = BOX_H - GAP * 2;
+    int ch = CFG_BOX_H - GAP * 2;
 
     hal_fillRect(x1, y1, cw, ch, color);
     hal_fillRect(x1, y1, cw, 3, hal_color(130, 50, 130));
@@ -467,7 +513,7 @@ static void drawSelectCell(int row, int col, HalColor color) {
 // --- Full grid draw ---
 static void drawGrid(bool useGridColors, bool selectMode) {
     hal_fillScreen(hal_color(15, 15, 20));
-    drawStatusBar();
+    if (selectMode) drawConfigStatusBar(); else drawStatusBar();
     for (int row = 0; row < 3; row++) {
         for (int col = 0; col < 3; col++) {
             if (selectMode) {
@@ -980,7 +1026,20 @@ void app_loop() {
         return;
     }
 
-    // --- Status bar: WiFi icon tap ---
+    // --- Config screen (SELECT_MIX): thicker status bar with WiFi button ---
+    if (appState == SELECT_MIX && ty < CONFIG_STATUS_H) {
+        if (tx >= CFG_WIFI_BTN_X) {
+            beepTouch();
+            hal_waitForRelease();
+            if (hal_wifiIsActive()) hal_wifiStop(); else hal_wifiStart();
+            drawConfigStatusBar();
+            hal_delay(300); // debounce — prevent ghost re-toggle
+        }
+        hal_delay(20);
+        return;
+    }
+
+    // --- Normal status bar: WiFi icon tap ---
     if (ty < GRID_Y) {
         if (tx >= WIFI_ICON_X - 10) {
             beepTouch();
@@ -991,14 +1050,17 @@ void app_loop() {
                 hal_wifiStart();
             }
             drawWifiIcon();
+            hal_delay(300); // debounce — prevent ghost re-toggle
         }
         hal_delay(20);
         return;
     }
 
-    // Map touch to 3×3 grid
+    // Map touch to 3×3 grid (config screen uses thicker status bar)
+    int gridY = (appState == SELECT_MIX) ? CONFIG_STATUS_H : GRID_Y;
+    int boxH  = (appState == SELECT_MIX) ? CFG_BOX_H : BOX_H;
     int col    = tx / BOX_W;  if (col > 2) col = 2;
-    int row    = (ty - GRID_Y) / BOX_H;  if (row < 0) row = 0; if (row > 2) row = 2;
+    int row    = (ty - gridY) / boxH;  if (row < 0) row = 0; if (row > 2) row = 2;
     int number = row * 3 + col + 1;
 
     switch (appState) {
