@@ -35,7 +35,7 @@ Each motor uses a GPIO pair (IN1 = forward, IN2 = reverse). For pumps, only IN1 
 |-------|-------|------------|------------|
 | Motor 1 | syrup_1 | 1  | 2  |
 | Motor 2 | syrup_2 | 3  | 4  |
-| Motor 3 | syrup_3 | 5  | 6  |
+| Motor 3 | syrup_3 | 39 | 6  |
 | Motor 4 | syrup_4 | 7  | 8  |
 | Motor 5 | syrup_5 | 9  | 10 |
 | Motor 6 | syrup_6 | 11 | 12 |
@@ -44,7 +44,7 @@ Each motor uses a GPIO pair (IN1 = forward, IN2 = reverse). For pumps, only IN1 
 
 - Max **2 motors** run concurrently to limit inrush current
 - **500 ms stagger delay** between starting motors in a pair
-- Pour rate: **10 s per unit** (configurable in `config.h`)
+- Pour rate: **5.56 s per unit** (configurable in `config.h`)
 
 ## Architecture — HAL Abstraction
 
@@ -155,10 +155,56 @@ When POUR is pressed, the machine dispenses all configured syrups:
 Key parameters in `include/config.h`:
 
 ```cpp
-constexpr float SECONDS_PER_UNIT = 10.0f;  // pour time per unit (seconds)
-constexpr int   STAGGER_DELAY_MS = 500;    // stagger between motor starts (ms)
-constexpr int   MAX_CONCURRENT   = 2;      // max simultaneous motors
-constexpr int   SECRET_CODE[4]   = {4, 7, 2, 5};  // passcode to enter edit mode
+constexpr int   FONT_SIZE_BOXNUMBER = 35;      // grid cell number font size (0-100 scale)
+constexpr int   FONT_SIZE_BOXNAME   = 9;       // mix name font size in points (7,8,9,10,11,12)
+constexpr float SECONDS_PER_UNIT    = 5.5556f; // pour time per 10ml unit (seconds)
+constexpr int   STAGGER_DELAY_MS    = 500;     // stagger between motor starts (ms)
+constexpr int   MAX_CONCURRENT      = 2;       // max simultaneous motors
+constexpr int   SECRET_CODE[4]      = {4, 7, 2, 5}; // passcode to enter edit mode
 ```
 
 Recipe data is stored in `data/syrup_mixes.json` (9 mixes × 8 channels, auto-created on first run).
+
+## Turkish Character Support
+
+The built-in TFT_eSPI bitmap fonts only cover ASCII (0x20–0x7E), so Turkish characters like **Ç ç Ğ ğ İ ı Ö ö Ş ş Ü ü** are not rendered. This project includes pre-generated GFX FreeFont headers that cover the full Latin Extended-A Unicode range (U+0020–U+017F).
+
+### Included Font Sizes
+
+| Header File | Point Size | GFXfont Struct |
+|-------------|------------|----------------|
+| `include/FreeSansTurkish7pt.h`  | 7pt  | `FreeSans7pt8b`  |
+| `include/FreeSansTurkish8pt.h`  | 8pt  | `FreeSans8pt8b`  |
+| `include/FreeSansTurkish9pt.h`  | 9pt  | `FreeSans9pt8b`  |
+| `include/FreeSansTurkish10pt.h` | 10pt | `FreeSans10pt8b` |
+| `include/FreeSansTurkish11pt.h` | 11pt | `FreeSans11pt8b` |
+| `include/FreeSansTurkish12pt.h` | 12pt | `FreeSans12pt8b` |
+
+The active size is controlled by `FONT_SIZE_BOXNAME` in `config.h`. Mix names are rendered via `hal_drawString_Turkish()` which selects the correct font at runtime.
+
+### Generating Fonts with Adafruit fontconvert
+
+The font headers were generated using the **Adafruit GFX fontconvert** tool. To regenerate them or add new sizes/fonts:
+
+```bash
+# 1. Clone Adafruit GFX Library and build fontconvert
+git clone https://github.com/adafruit/Adafruit-GFX-Library.git /tmp/Adafruit-GFX-Library
+cd /tmp/Adafruit-GFX-Library/fontconvert
+make
+
+# 2. Generate a font header (FreeSans, 9pt, Unicode range 0x20–0x17F)
+./fontconvert /usr/share/fonts/truetype/freefont/FreeSans.ttf 9 0x20 0x17F > FreeSansTurkish9pt.h
+
+# 3. Copy to project
+cp FreeSansTurkish9pt.h /path/to/Syrup-touch/esp32s2/include/
+```
+
+**Parameters:**
+- Arg 1: Path to a `.ttf` font file
+- Arg 2: Point size (e.g., `7`, `8`, `9`, `10`, `11`, `12`)
+- Arg 3: First Unicode codepoint (`0x20` = space)
+- Arg 4: Last Unicode codepoint (`0x17F` = end of Latin Extended-A)
+
+The range `0x20–0x17F` covers all standard ASCII characters plus every Turkish-specific letter. You can use any TrueType font — just make sure it contains the Turkish glyphs.
+
+> **Note:** Larger point sizes and wider Unicode ranges increase Flash usage. Each font size adds ~5–15 KB to the firmware.
