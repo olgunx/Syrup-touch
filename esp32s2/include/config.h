@@ -7,7 +7,7 @@
 // UI FONT SIZES (0-100 scale)
 // ============================================
 constexpr int FONT_SIZE_BOXNUMBER = 35; // Font size for numbers in grid cells (0-100)
-constexpr int FONT_SIZE_BOXNAME = 50;   // Font size for names in grid cells (0-100)
+constexpr int FONT_SIZE_BOXNAME = 9;    // Turkish font pt size for names in grid cells (7,8,9,10,11,12)
 
 // ============================================
 // MOTOR GPIO PIN MAPPING
