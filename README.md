@@ -97,12 +97,29 @@ pio run -e simulator
 
 ### Flash to Device
 
+On a **fresh ESP32**, upload both the filesystem and firmware:
+
 ```bash
-pio run -e lolin_s2_mini --target upload
+# 1. Upload filesystem (index.html + syrup_mixes.json to LittleFS)
+pio run -e lolin_s2_mini -t uploadfs
+
+# 2. Upload firmware
+pio run -e lolin_s2_mini -t upload
 
 # Monitor serial output
 pio device monitor
 ```
+
+#### VS Code (PlatformIO Sidebar)
+
+1. Select **lolin_s2_mini** environment in the status bar (bottom)
+2. Open the **PlatformIO sidebar** (alien icon on the left)
+3. Under **PROJECT TASKS → lolin_s2_mini**:
+   - Click **Upload Filesystem Image** (uploads `data/` folder to LittleFS)
+   - Click **Upload** (uploads firmware)
+   - Click **Monitor** to view serial output
+
+> **Tip:** If the board doesn't enter upload mode automatically, hold **BOOT (0)**, press **RST**, then release **BOOT**.
 
 ### Run Simulator
 
@@ -161,9 +178,22 @@ constexpr float SECONDS_PER_UNIT    = 5.5556f; // pour time per 10ml unit (secon
 constexpr int   STAGGER_DELAY_MS    = 500;     // stagger between motor starts (ms)
 constexpr int   MAX_CONCURRENT      = 2;       // max simultaneous motors
 constexpr int   SECRET_CODE[4]      = {4, 7, 2, 5}; // passcode to enter edit mode
+constexpr const char *WIFI_AP_SSID  = "SyrupTouch";  // WiFi access point name
+constexpr const char *WIFI_AP_PASS  = "syrup1234";   // WiFi password (min 8 chars)
 ```
 
 Recipe data is stored in `data/syrup_mixes.json` (9 mixes × 8 channels, auto-created on first run).
+
+### WiFi Web Interface
+
+Mix recipes can also be edited from a phone or laptop over WiFi:
+
+1. **Tap the circle icon** in the top-right corner of the status bar (turns green when active)
+2. Connect your phone to WiFi network **SyrupTouch** (password: `syrup1234`)
+3. Open a browser and go to **http://192.168.4.1**
+4. Edit mix names and syrup values, then tap **Save All**
+5. The device auto-reloads the updated recipes
+6. Tap the icon again to turn WiFi off
 
 ## Turkish Character Support
 
