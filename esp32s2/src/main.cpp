@@ -420,10 +420,11 @@ static void drawGridCell(int row, int col, HalColor color, bool pressed = false)
     hal_setTextDatum(HAL_DATUM_MC);
     hal_setTextColor(COL_WHITE, base);
     int name_offset = 10; // vertical offset between lines
+    // Use Turkish-aware drawString for mix names
     if (mixNames[num - 1][0][0])
-        hal_drawString(mixNames[num - 1][0], name_cx, name_cy - name_offset, FONT_SIZE_BOXNAME / 20);
+        hal_drawString_Turkish(mixNames[num - 1][0], name_cx, name_cy - name_offset);
     if (mixNames[num - 1][1][0])
-        hal_drawString(mixNames[num - 1][1], name_cx, name_cy + name_offset, FONT_SIZE_BOXNAME / 20);
+        hal_drawString_Turkish(mixNames[num - 1][1], name_cx, name_cy + name_offset);
 }
 
 // --- Draw a single grid cell for select-mix mode (purple tinted) ---

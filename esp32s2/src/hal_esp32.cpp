@@ -76,6 +76,14 @@ void hal_drawNumber(int num, int x, int y, int font) {
     tft.drawNumber(num, x, y, font);
 }
 
+#include "FreeSansTurkish9pt.h"
+
+void hal_drawString_Turkish(const char *str, int x, int y) {
+    tft.setFreeFont(&FreeSans9pt8b);
+    tft.drawString(str, x, y);  // respects current datum (alignment)
+    tft.setFreeFont(nullptr);
+}
+
 // ============================================
 // TOUCH
 // ============================================

@@ -51,6 +51,7 @@ void hal_setTextDatum(HalDatum d);
 void hal_setTextColor(HalColor fg, HalColor bg = 0);
 void hal_drawString(const char *str, int x, int y, int font);
 void hal_drawNumber(int num, int x, int y, int font);
+void hal_drawString_Turkish(const char *str, int x, int y);
 
 // ============================================
 // TOUCH
