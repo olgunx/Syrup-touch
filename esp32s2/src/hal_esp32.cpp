@@ -76,11 +76,28 @@ void hal_drawNumber(int num, int x, int y, int font) {
     tft.drawNumber(num, x, y, font);
 }
 
+#include "FreeSansTurkish7pt.h"
+#include "FreeSansTurkish8pt.h"
 #include "FreeSansTurkish9pt.h"
+#include "FreeSansTurkish10pt.h"
+#include "FreeSansTurkish11pt.h"
+#include "FreeSansTurkish12pt.h"
 
-void hal_drawString_Turkish(const char *str, int x, int y) {
-    tft.setFreeFont(&FreeSans9pt8b);
-    tft.drawString(str, x, y);  // respects current datum (alignment)
+static const GFXfont *turkishFont(int size) {
+    switch (size) {
+        case  7: return &FreeSans7pt8b;
+        case  8: return &FreeSans8pt8b;
+        default:
+        case  9: return &FreeSans9pt8b;
+        case 10: return &FreeSans10pt8b;
+        case 11: return &FreeSans11pt8b;
+        case 12: return &FreeSans12pt8b;
+    }
+}
+
+void hal_drawString_Turkish(const char *str, int x, int y, int size) {
+    tft.setFreeFont(turkishFont(size));
+    tft.drawString(str, x, y);
     tft.setFreeFont(nullptr);
 }
 

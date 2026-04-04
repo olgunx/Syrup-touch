@@ -273,9 +273,10 @@ void hal_drawString(const char *str, int x, int y, int font) {
     drawText(str, x, y, font, gDatum, gTextFg, gTextBg);
 }
 
-void hal_drawString_Turkish(const char *str, int x, int y) {
-    // Simulator: use default text rendering (TTF already supports Turkish)
-    drawText(str, x, y, 2, gDatum, gTextFg, gTextBg);
+void hal_drawString_Turkish(const char *str, int x, int y, int size) {
+    // Simulator: map size to built-in font (TTF already supports Turkish)
+    int font = (size <= 8) ? 1 : 2;
+    drawText(str, x, y, font, gDatum, gTextFg, gTextBg);
 }
 
 void hal_drawNumber(int num, int x, int y, int font) {
