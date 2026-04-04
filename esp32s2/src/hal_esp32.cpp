@@ -11,6 +11,7 @@
 #include <LittleFS.h>
 #include <WiFi.h>
 #include <WebServer.h>
+#include <DNSServer.h>
 
 // ============================================
 // DISPLAY
@@ -207,6 +208,7 @@ bool hal_shouldQuit() { return false; }
 // WIFI AP + WEB SERVER
 // ============================================
 static WebServer *webServer = nullptr;
+static DNSServer *dnsServer = nullptr;
 static bool wifiActive = false;
 static bool mixesUpdatedFlag = false;
 
@@ -248,6 +250,12 @@ static void handleIndex() {
     f.close();
 }
 
+// Captive portal: redirect all unknown requests to root
+static void handleCaptivePortal() {
+    webServer->sendHeader("Location", "http://192.168.4.1/", true);
+    webServer->send(302, "text/plain", "");
+}
+
 bool hal_wifiStart() {
     if (wifiActive) return true;
 
@@ -267,7 +275,20 @@ bool hal_wifiStart() {
     webServer->on("/", HTTP_GET, handleIndex);
     webServer->on("/api/mixes", HTTP_GET, handleGetMixes);
     webServer->on("/api/mixes", HTTP_POST, handlePostMixes);
+    // Captive portal detection endpoints
+    webServer->on("/generate_204", HTTP_GET, handleCaptivePortal);     // Android
+    webServer->on("/gen_204", HTTP_GET, handleCaptivePortal);           // Android
+    webServer->on("/hotspot-detect.html", HTTP_GET, handleCaptivePortal); // Apple
+    webServer->on("/library/test/success.html", HTTP_GET, handleCaptivePortal); // Apple
+    webServer->on("/connecttest.txt", HTTP_GET, handleCaptivePortal);   // Windows
+    webServer->on("/redirect", HTTP_GET, handleCaptivePortal);          // Windows
+    webServer->on("/fwlink", HTTP_GET, handleCaptivePortal);            // Windows
+    webServer->onNotFound(handleCaptivePortal);  // catch-all redirect
     webServer->begin();
+
+    // DNS server: resolve all domains to our IP (captive portal)
+    dnsServer = new DNSServer();
+    dnsServer->start(53, "*", WiFi.softAPIP());
 
     wifiActive = true;
     char msg[80];
@@ -279,6 +300,11 @@ bool hal_wifiStart() {
 
 void hal_wifiStop() {
     if (!wifiActive) return;
+    if (dnsServer) {
+        dnsServer->stop();
+        delete dnsServer;
+        dnsServer = nullptr;
+    }
     if (webServer) {
         webServer->stop();
         delete webServer;
@@ -293,8 +319,9 @@ void hal_wifiStop() {
 bool hal_wifiIsActive() { return wifiActive; }
 
 void hal_wifiProcess() {
-    if (wifiActive && webServer) {
-        webServer->handleClient();
+    if (wifiActive) {
+        if (dnsServer) dnsServer->processNextRequest();
+        if (webServer) webServer->handleClient();
     }
 }
 
