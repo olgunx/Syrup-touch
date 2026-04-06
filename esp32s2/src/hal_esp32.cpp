@@ -1,5 +1,5 @@
 // HAL implementation for ESP32-S2 — real hardware
-// ILI9341 display, XPT2046 touch, L9110S motors, LittleFS storage
+// ILI9341 display, XPT2046 touch, TB6612FNG motors, LittleFS storage
 
 #ifdef ARDUINO   // only compiled for the ESP32 target
 

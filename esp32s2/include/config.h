@@ -12,7 +12,7 @@ constexpr int FONT_SIZE_BOXNAME = 9;    // Turkish font pt size for names in gri
 // ============================================
 // MOTOR GPIO PIN MAPPING
 // ============================================
-// Each L9110S channel uses two GPIO pins (IN1=forward, IN2=reverse).
+// Each TB6612FNG channel uses two GPIO pins (IN1=forward, IN2=reverse).
 // For pumps, only IN1 is driven HIGH to pour; IN2 stays LOW.
 //
 // ESP32-S2 Mini pinout:

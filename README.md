@@ -11,7 +11,7 @@ A touchscreen-controlled syrup dispensing machine with 8 independent pump/motor 
 | Microcontroller | LOLIN S2 Mini (ESP32-S2, 4MB Flash, 2MB PSRAM) | USB-C |
 | LCD Display | ILI9341 (240×320, 2.8") | SPI |
 | Touch Controller | XPT2046 (resistive) | SPI (shared bus) |
-| Motor/Pump Drivers | 4× L9110S dual H-bridge module (8 channels) | GPIO |
+| Motor/Pump Drivers | 4× TB6612FNG dual H-bridge module (8 channels) | GPIO |
 
 ### SPI Pin Mapping
 
@@ -28,7 +28,7 @@ A touchscreen-controlled syrup dispensing machine with 8 independent pump/motor 
 
 ### Motor Control
 
-Each L9110S module drives 2 motors. 4 modules provide 8 independent pump channels.
+Each TB6612FNG module drives 2 motors. 4 modules provide 8 independent pump channels.
 Each motor uses a GPIO pair (IN1 = forward, IN2 = reverse). For pumps, only IN1 is driven HIGH to pour.
 
 | Motor | Syrup | IN1 (GPIO) | IN2 (GPIO) |
@@ -45,6 +45,10 @@ Each motor uses a GPIO pair (IN1 = forward, IN2 = reverse). For pumps, only IN1 
 - Max **2 motors** run concurrently to limit inrush current
 - **500 ms stagger delay** between starting motors in a pair
 - Pour rate: **5.56 s per unit** (configurable in `config.h`)
+
+### Wiring Diagram
+
+A full SVG hardware wiring diagram is available at [`hardware_wiring.svg`](hardware_wiring.svg).
 
 ## Architecture — HAL Abstraction
 

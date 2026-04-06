@@ -1,0 +1,198 @@
+<?xml version="1.0" ?>
+<svg xmlns="http://www.w3.org/2000/svg" width="1100" height="820" viewBox="0 0 1100 820" style="background:#1a1a2e;font-family:monospace">
+  <defs>
+    <marker id="arr" markerWidth="8" markerHeight="6" refX="6" refY="3" orient="auto">
+      <polygon points="0 0, 8 3, 0 6" fill="#aaa"/>
+    </marker>
+  </defs>
+  <text x="550" y="30" fill="#f0c040" font-size="18" text-anchor="middle" font-family="monospace" font-weight="bold">Syrup-touch  ·  Hardware Wiring Diagram</text>
+  <text x="550" y="50" fill="#aaa" font-size="11" text-anchor="middle" font-family="monospace">ESP32-S2 Mini  ·  ILI9341 + XPT2046 (SPI)  ·  4× TB6612FNG (GPIO)  ·  Passive Buzzer</text>
+  <rect x="400" y="65" width="300" height="670" fill="#16213e" stroke="#4fc3f7" stroke-width="2.5" rx="10" ry="10"/>
+  <text x="550" y="87" fill="#4fc3f7" font-size="14" text-anchor="middle" font-family="monospace" font-weight="bold">LOLIN S2 Mini</text>
+  <text x="550" y="103" fill="#7ec8e3" font-size="11" text-anchor="middle" font-family="monospace">(ESP32-S2)</text>
+  <line x1="400" y1="130" x2="388" y2="130" stroke="#ef9a9a" stroke-width="2"/>
+  <text x="406" y="134" fill="#ef9a9a" font-size="10" text-anchor="start" font-family="monospace">GPIO 33 · LCD DC</text>
+  <line x1="400" y1="158" x2="388" y2="158" stroke="#ef9a9a" stroke-width="2"/>
+  <text x="406" y="162" fill="#ef9a9a" font-size="10" text-anchor="start" font-family="monospace">GPIO 34 · LCD CS</text>
+  <line x1="400" y1="186" x2="388" y2="186" stroke="#f48fb1" stroke-width="2"/>
+  <text x="406" y="190" fill="#f48fb1" font-size="10" text-anchor="start" font-family="monospace">GPIO 35 · MOSI</text>
+  <line x1="400" y1="214" x2="388" y2="214" stroke="#f48fb1" stroke-width="2"/>
+  <text x="406" y="218" fill="#f48fb1" font-size="10" text-anchor="start" font-family="monospace">GPIO 36 · SCLK</text>
+  <line x1="400" y1="242" x2="388" y2="242" stroke="#f48fb1" stroke-width="2"/>
+  <text x="406" y="246" fill="#f48fb1" font-size="10" text-anchor="start" font-family="monospace">GPIO 37 · MISO</text>
+  <line x1="400" y1="270" x2="388" y2="270" stroke="#ef9a9a" stroke-width="2"/>
+  <text x="406" y="274" fill="#ef9a9a" font-size="10" text-anchor="start" font-family="monospace">GPIO 18 · LCD RST</text>
+  <line x1="400" y1="298" x2="388" y2="298" stroke="#80cbc4" stroke-width="2"/>
+  <text x="406" y="302" fill="#80cbc4" font-size="10" text-anchor="start" font-family="monospace">GPIO 16 · TOUCH CS</text>
+  <line x1="400" y1="326" x2="388" y2="326" stroke="#80cbc4" stroke-width="2"/>
+  <text x="406" y="330" fill="#80cbc4" font-size="10" text-anchor="start" font-family="monospace">GPIO 38 · TOUCH IRQ</text>
+  <line x1="400" y1="354" x2="388" y2="354" stroke="#ffe082" stroke-width="2"/>
+  <text x="406" y="358" fill="#ffe082" font-size="10" text-anchor="start" font-family="monospace">GPIO 15 · LED</text>
+  <line x1="400" y1="382" x2="388" y2="382" stroke="#ce93d8" stroke-width="2"/>
+  <text x="406" y="386" fill="#ce93d8" font-size="10" text-anchor="start" font-family="monospace">GPIO 40 · BUZZER</text>
+  <line x1="700" y1="130" x2="712" y2="130" stroke="#a5d6a7" stroke-width="2"/>
+  <text x="694" y="134" fill="#a5d6a7" font-size="10" text-anchor="end" font-family="monospace">GPIO  1 · M1-IN1</text>
+  <line x1="700" y1="158" x2="712" y2="158" stroke="#a5d6a7" stroke-width="2"/>
+  <text x="694" y="162" fill="#a5d6a7" font-size="10" text-anchor="end" font-family="monospace">GPIO  2 · M1-IN2</text>
+  <line x1="700" y1="186" x2="712" y2="186" stroke="#c8e6c9" stroke-width="2"/>
+  <text x="694" y="190" fill="#c8e6c9" font-size="10" text-anchor="end" font-family="monospace">GPIO  3 · M2-IN1</text>
+  <line x1="700" y1="214" x2="712" y2="214" stroke="#c8e6c9" stroke-width="2"/>
+  <text x="694" y="218" fill="#c8e6c9" font-size="10" text-anchor="end" font-family="monospace">GPIO  4 · M2-IN2</text>
+  <line x1="700" y1="242" x2="712" y2="242" stroke="#a5d6a7" stroke-width="2"/>
+  <text x="694" y="246" fill="#a5d6a7" font-size="10" text-anchor="end" font-family="monospace">GPIO 39 · M3-IN1</text>
+  <line x1="700" y1="270" x2="712" y2="270" stroke="#a5d6a7" stroke-width="2"/>
+  <text x="694" y="274" fill="#a5d6a7" font-size="10" text-anchor="end" font-family="monospace">GPIO  6 · M3-IN2</text>
+  <line x1="700" y1="298" x2="712" y2="298" stroke="#c8e6c9" stroke-width="2"/>
+  <text x="694" y="302" fill="#c8e6c9" font-size="10" text-anchor="end" font-family="monospace">GPIO  7 · M4-IN1</text>
+  <line x1="700" y1="326" x2="712" y2="326" stroke="#c8e6c9" stroke-width="2"/>
+  <text x="694" y="330" fill="#c8e6c9" font-size="10" text-anchor="end" font-family="monospace">GPIO  8 · M4-IN2</text>
+  <line x1="700" y1="354" x2="712" y2="354" stroke="#a5d6a7" stroke-width="2"/>
+  <text x="694" y="358" fill="#a5d6a7" font-size="10" text-anchor="end" font-family="monospace">GPIO  9 · M5-IN1</text>
+  <line x1="700" y1="382" x2="712" y2="382" stroke="#a5d6a7" stroke-width="2"/>
+  <text x="694" y="386" fill="#a5d6a7" font-size="10" text-anchor="end" font-family="monospace">GPIO 10 · M5-IN2</text>
+  <line x1="700" y1="410" x2="712" y2="410" stroke="#c8e6c9" stroke-width="2"/>
+  <text x="694" y="414" fill="#c8e6c9" font-size="10" text-anchor="end" font-family="monospace">GPIO 11 · M6-IN1</text>
+  <line x1="700" y1="438" x2="712" y2="438" stroke="#c8e6c9" stroke-width="2"/>
+  <text x="694" y="442" fill="#c8e6c9" font-size="10" text-anchor="end" font-family="monospace">GPIO 12 · M6-IN2</text>
+  <line x1="700" y1="466" x2="712" y2="466" stroke="#a5d6a7" stroke-width="2"/>
+  <text x="694" y="470" fill="#a5d6a7" font-size="10" text-anchor="end" font-family="monospace">GPIO 13 · M7-IN1</text>
+  <line x1="700" y1="494" x2="712" y2="494" stroke="#a5d6a7" stroke-width="2"/>
+  <text x="694" y="498" fill="#a5d6a7" font-size="10" text-anchor="end" font-family="monospace">GPIO 14 · M7-IN2</text>
+  <line x1="700" y1="522" x2="712" y2="522" stroke="#c8e6c9" stroke-width="2"/>
+  <text x="694" y="526" fill="#c8e6c9" font-size="10" text-anchor="end" font-family="monospace">GPIO 17 · M8-IN1</text>
+  <line x1="700" y1="550" x2="712" y2="550" stroke="#c8e6c9" stroke-width="2"/>
+  <text x="694" y="554" fill="#c8e6c9" font-size="10" text-anchor="end" font-family="monospace">GPIO 21 · M8-IN2</text>
+  <rect x="60" y="65" width="185" height="170" fill="#0d1b2a" stroke="#ef9a9a" stroke-width="2" rx="6" ry="6"/>
+  <text x="152" y="85" fill="#ef9a9a" font-size="13" text-anchor="middle" font-family="monospace" font-weight="bold">ILI9341 LCD</text>
+  <text x="152" y="101" fill="#aaa" font-size="10" text-anchor="middle" font-family="monospace">240×320 · 2.8&quot; TFT</text>
+  <text x="152" y="115" fill="#aaa" font-size="10" text-anchor="middle" font-family="monospace">SPI @ 40 MHz</text>
+  <text x="152" y="140" fill="#ef9a9a" font-size="9" text-anchor="middle" font-family="monospace">VCC</text>
+  <text x="152" y="152" fill="#ef9a9a" font-size="9" text-anchor="middle" font-family="monospace">GND</text>
+  <text x="152" y="164" fill="#ef9a9a" font-size="9" text-anchor="middle" font-family="monospace">CS (34)</text>
+  <text x="152" y="176" fill="#ef9a9a" font-size="9" text-anchor="middle" font-family="monospace">RST (18)</text>
+  <text x="152" y="188" fill="#ef9a9a" font-size="9" text-anchor="middle" font-family="monospace">DC (33)</text>
+  <text x="152" y="200" fill="#ef9a9a" font-size="9" text-anchor="middle" font-family="monospace">MOSI (35)</text>
+  <text x="152" y="212" fill="#ef9a9a" font-size="9" text-anchor="middle" font-family="monospace">SCLK (36)</text>
+  <text x="152" y="224" fill="#ef9a9a" font-size="9" text-anchor="middle" font-family="monospace">LED</text>
+  <rect x="60" y="260" width="185" height="140" fill="#0d1b2a" stroke="#80cbc4" stroke-width="2" rx="6" ry="6"/>
+  <text x="152" y="280" fill="#80cbc4" font-size="13" text-anchor="middle" font-family="monospace" font-weight="bold">XPT2046 Touch</text>
+  <text x="152" y="296" fill="#aaa" font-size="10" text-anchor="middle" font-family="monospace">Resistive · Shared SPI</text>
+  <text x="152" y="310" fill="#aaa" font-size="10" text-anchor="middle" font-family="monospace">SPI @ 2.5 MHz</text>
+  <text x="152" y="330" fill="#80cbc4" font-size="9" text-anchor="middle" font-family="monospace">CS (16)</text>
+  <text x="152" y="343" fill="#80cbc4" font-size="9" text-anchor="middle" font-family="monospace">IRQ (38)</text>
+  <text x="152" y="356" fill="#80cbc4" font-size="9" text-anchor="middle" font-family="monospace">MOSI (35)</text>
+  <text x="152" y="369" fill="#80cbc4" font-size="9" text-anchor="middle" font-family="monospace">MISO (37)</text>
+  <text x="152" y="382" fill="#80cbc4" font-size="9" text-anchor="middle" font-family="monospace">SCLK (36)</text>
+  <rect x="60" y="420" width="185" height="30" fill="#1a2a1a" stroke="#f48fb1" stroke-width="1.5" rx="4" ry="4"/>
+  <text x="152" y="440" fill="#f48fb1" font-size="9" text-anchor="middle" font-family="monospace">Shared FSPI Bus: MOSI/MISO/SCLK</text>
+  <path d="M 245,140 L 370,140 L 370,130 L 388,130" fill="none" stroke="#ef9a9a" stroke-width="1.2"/>
+  <path d="M 245,152 L 366,152 L 366,158 L 388,158" fill="none" stroke="#ef9a9a" stroke-width="1.2"/>
+  <path d="M 245,164 L 362,164 L 362,186 L 388,186" fill="none" stroke="#f48fb1" stroke-width="1.2"/>
+  <path d="M 245,176 L 358,176 L 358,214 L 388,214" fill="none" stroke="#f48fb1" stroke-width="1.2"/>
+  <path d="M 245,188 L 354,188 L 354,242 L 388,242" fill="none" stroke="#f48fb1" stroke-width="1.2"/>
+  <path d="M 245,200 L 350,200 L 350,270 L 388,270" fill="none" stroke="#ef9a9a" stroke-width="1.2"/>
+  <path d="M 245,330 L 346,330 L 346,298 L 388,298" fill="none" stroke="#80cbc4" stroke-width="1.2"/>
+  <path d="M 245,343 L 342,343 L 342,326 L 388,326" fill="none" stroke="#80cbc4" stroke-width="1.2"/>
+  <rect x="760" y="65" width="195" height="155" fill="#0a1f0a" stroke="#a5d6a7" stroke-width="2" rx="6" ry="6"/>
+  <text x="857" y="85" fill="#a5d6a7" font-size="13" text-anchor="middle" font-family="monospace" font-weight="bold">TB6612FNG  #1</text>
+  <text x="857" y="100" fill="#aaa" font-size="10" text-anchor="middle" font-family="monospace">M1 &amp; M2</text>
+  <text x="772" y="120" fill="#a5d6a7" font-size="9" text-anchor="start" font-family="monospace">AIN1→G1</text>
+  <text x="772" y="134" fill="#a5d6a7" font-size="9" text-anchor="start" font-family="monospace">AIN2→G2</text>
+  <text x="772" y="148" fill="#a5d6a7" font-size="9" text-anchor="start" font-family="monospace">BIN1→G3</text>
+  <text x="772" y="162" fill="#a5d6a7" font-size="9" text-anchor="start" font-family="monospace">BIN2→G4</text>
+  <rect x="970" y="110" width="65" height="22" fill="#1a1a0a" stroke="#ffd54f" stroke-width="1.2" rx="3" ry="3"/>
+  <text x="1002" y="125" fill="#ffd54f" font-size="9" text-anchor="middle" font-family="monospace">Pump 1</text>
+  <path d="M 955,122 L 970,122" fill="none" stroke="#ffd54f" stroke-width="1.2"/>
+  <rect x="970" y="138" width="65" height="22" fill="#1a1a0a" stroke="#ffd54f" stroke-width="1.2" rx="3" ry="3"/>
+  <text x="1002" y="153" fill="#ffd54f" font-size="9" text-anchor="middle" font-family="monospace">Pump 2</text>
+  <path d="M 955,150 L 970,150" fill="none" stroke="#ffd54f" stroke-width="1.2"/>
+  <text x="857" y="210" fill="#888" font-size="8" text-anchor="middle" font-family="monospace">STBY → 3.3 V  ·  VM → 12 V  ·  VCC → 3.3 V</text>
+  <path d="M 712,130 L 722,130 L 722,120 L 760,120" fill="none" stroke="#a5d6a7" stroke-width="1.1"/>
+  <path d="M 712,158 L 727,158 L 727,134 L 760,134" fill="none" stroke="#a5d6a7" stroke-width="1.1"/>
+  <path d="M 712,186 L 732,186 L 732,148 L 760,148" fill="none" stroke="#a5d6a7" stroke-width="1.1"/>
+  <path d="M 712,214 L 737,214 L 737,162 L 760,162" fill="none" stroke="#a5d6a7" stroke-width="1.1"/>
+  <rect x="760" y="240" width="195" height="155" fill="#0a1f0a" stroke="#c8e6c9" stroke-width="2" rx="6" ry="6"/>
+  <text x="857" y="260" fill="#c8e6c9" font-size="13" text-anchor="middle" font-family="monospace" font-weight="bold">TB6612FNG  #2</text>
+  <text x="857" y="275" fill="#aaa" font-size="10" text-anchor="middle" font-family="monospace">M3 &amp; M4</text>
+  <text x="772" y="295" fill="#c8e6c9" font-size="9" text-anchor="start" font-family="monospace">AIN1→G39</text>
+  <text x="772" y="309" fill="#c8e6c9" font-size="9" text-anchor="start" font-family="monospace">AIN2→G6</text>
+  <text x="772" y="323" fill="#c8e6c9" font-size="9" text-anchor="start" font-family="monospace">BIN1→G7</text>
+  <text x="772" y="337" fill="#c8e6c9" font-size="9" text-anchor="start" font-family="monospace">BIN2→G8</text>
+  <rect x="970" y="285" width="65" height="22" fill="#1a1a0a" stroke="#ffd54f" stroke-width="1.2" rx="3" ry="3"/>
+  <text x="1002" y="300" fill="#ffd54f" font-size="9" text-anchor="middle" font-family="monospace">Pump 3</text>
+  <path d="M 955,297 L 970,297" fill="none" stroke="#ffd54f" stroke-width="1.2"/>
+  <rect x="970" y="313" width="65" height="22" fill="#1a1a0a" stroke="#ffd54f" stroke-width="1.2" rx="3" ry="3"/>
+  <text x="1002" y="328" fill="#ffd54f" font-size="9" text-anchor="middle" font-family="monospace">Pump 4</text>
+  <path d="M 955,325 L 970,325" fill="none" stroke="#ffd54f" stroke-width="1.2"/>
+  <text x="857" y="385" fill="#888" font-size="8" text-anchor="middle" font-family="monospace">STBY → 3.3 V  ·  VM → 12 V  ·  VCC → 3.3 V</text>
+  <path d="M 712,242 L 722,242 L 722,295 L 760,295" fill="none" stroke="#c8e6c9" stroke-width="1.1"/>
+  <path d="M 712,270 L 727,270 L 727,309 L 760,309" fill="none" stroke="#c8e6c9" stroke-width="1.1"/>
+  <path d="M 712,298 L 732,298 L 732,323 L 760,323" fill="none" stroke="#c8e6c9" stroke-width="1.1"/>
+  <path d="M 712,326 L 737,326 L 737,337 L 760,337" fill="none" stroke="#c8e6c9" stroke-width="1.1"/>
+  <rect x="760" y="415" width="195" height="155" fill="#0a1f0a" stroke="#a5d6a7" stroke-width="2" rx="6" ry="6"/>
+  <text x="857" y="435" fill="#a5d6a7" font-size="13" text-anchor="middle" font-family="monospace" font-weight="bold">TB6612FNG  #3</text>
+  <text x="857" y="450" fill="#aaa" font-size="10" text-anchor="middle" font-family="monospace">M5 &amp; M6</text>
+  <text x="772" y="470" fill="#a5d6a7" font-size="9" text-anchor="start" font-family="monospace">AIN1→G9</text>
+  <text x="772" y="484" fill="#a5d6a7" font-size="9" text-anchor="start" font-family="monospace">AIN2→G10</text>
+  <text x="772" y="498" fill="#a5d6a7" font-size="9" text-anchor="start" font-family="monospace">BIN1→G11</text>
+  <text x="772" y="512" fill="#a5d6a7" font-size="9" text-anchor="start" font-family="monospace">BIN2→G12</text>
+  <rect x="970" y="460" width="65" height="22" fill="#1a1a0a" stroke="#ffd54f" stroke-width="1.2" rx="3" ry="3"/>
+  <text x="1002" y="475" fill="#ffd54f" font-size="9" text-anchor="middle" font-family="monospace">Pump 5</text>
+  <path d="M 955,472 L 970,472" fill="none" stroke="#ffd54f" stroke-width="1.2"/>
+  <rect x="970" y="488" width="65" height="22" fill="#1a1a0a" stroke="#ffd54f" stroke-width="1.2" rx="3" ry="3"/>
+  <text x="1002" y="503" fill="#ffd54f" font-size="9" text-anchor="middle" font-family="monospace">Pump 6</text>
+  <path d="M 955,500 L 970,500" fill="none" stroke="#ffd54f" stroke-width="1.2"/>
+  <text x="857" y="560" fill="#888" font-size="8" text-anchor="middle" font-family="monospace">STBY → 3.3 V  ·  VM → 12 V  ·  VCC → 3.3 V</text>
+  <path d="M 712,354 L 722,354 L 722,470 L 760,470" fill="none" stroke="#a5d6a7" stroke-width="1.1"/>
+  <path d="M 712,382 L 727,382 L 727,484 L 760,484" fill="none" stroke="#a5d6a7" stroke-width="1.1"/>
+  <path d="M 712,410 L 732,410 L 732,498 L 760,498" fill="none" stroke="#a5d6a7" stroke-width="1.1"/>
+  <path d="M 712,438 L 737,438 L 737,512 L 760,512" fill="none" stroke="#a5d6a7" stroke-width="1.1"/>
+  <rect x="760" y="590" width="195" height="155" fill="#0a1f0a" stroke="#c8e6c9" stroke-width="2" rx="6" ry="6"/>
+  <text x="857" y="610" fill="#c8e6c9" font-size="13" text-anchor="middle" font-family="monospace" font-weight="bold">TB6612FNG  #4</text>
+  <text x="857" y="625" fill="#aaa" font-size="10" text-anchor="middle" font-family="monospace">M7 &amp; M8</text>
+  <text x="772" y="645" fill="#c8e6c9" font-size="9" text-anchor="start" font-family="monospace">AIN1→G13</text>
+  <text x="772" y="659" fill="#c8e6c9" font-size="9" text-anchor="start" font-family="monospace">AIN2→G14</text>
+  <text x="772" y="673" fill="#c8e6c9" font-size="9" text-anchor="start" font-family="monospace">BIN1→G17</text>
+  <text x="772" y="687" fill="#c8e6c9" font-size="9" text-anchor="start" font-family="monospace">BIN2→G21</text>
+  <rect x="970" y="635" width="65" height="22" fill="#1a1a0a" stroke="#ffd54f" stroke-width="1.2" rx="3" ry="3"/>
+  <text x="1002" y="650" fill="#ffd54f" font-size="9" text-anchor="middle" font-family="monospace">Pump 7</text>
+  <path d="M 955,647 L 970,647" fill="none" stroke="#ffd54f" stroke-width="1.2"/>
+  <rect x="970" y="663" width="65" height="22" fill="#1a1a0a" stroke="#ffd54f" stroke-width="1.2" rx="3" ry="3"/>
+  <text x="1002" y="678" fill="#ffd54f" font-size="9" text-anchor="middle" font-family="monospace">Pump 8</text>
+  <path d="M 955,675 L 970,675" fill="none" stroke="#ffd54f" stroke-width="1.2"/>
+  <text x="857" y="735" fill="#888" font-size="8" text-anchor="middle" font-family="monospace">STBY → 3.3 V  ·  VM → 12 V  ·  VCC → 3.3 V</text>
+  <path d="M 712,466 L 722,466 L 722,645 L 760,645" fill="none" stroke="#c8e6c9" stroke-width="1.1"/>
+  <path d="M 712,494 L 727,494 L 727,659 L 760,659" fill="none" stroke="#c8e6c9" stroke-width="1.1"/>
+  <path d="M 712,522 L 732,522 L 732,673 L 760,673" fill="none" stroke="#c8e6c9" stroke-width="1.1"/>
+  <path d="M 712,550 L 737,550 L 737,687 L 760,687" fill="none" stroke="#c8e6c9" stroke-width="1.1"/>
+  <rect x="60" y="480" width="185" height="60" fill="#1a0a1a" stroke="#ce93d8" stroke-width="2" rx="6" ry="6"/>
+  <text x="152" y="502" fill="#ce93d8" font-size="13" text-anchor="middle" font-family="monospace" font-weight="bold">Passive Buzzer</text>
+  <text x="152" y="518" fill="#aaa" font-size="9" text-anchor="middle" font-family="monospace">GPIO 40 via LEDC PWM (ch 0)</text>
+  <text x="152" y="532" fill="#888" font-size="9" text-anchor="middle" font-family="monospace">8-bit · tone generation</text>
+  <path d="M 245,510 L 388,382" fill="none" stroke="#ce93d8" stroke-width="1.2"/>
+  <rect x="60" y="560" width="185" height="45" fill="#1a1a00" stroke="#ffe082" stroke-width="1.5" rx="6" ry="6"/>
+  <text x="152" y="578" fill="#ffe082" font-size="13" text-anchor="middle" font-family="monospace" font-weight="bold">Onboard LED</text>
+  <text x="152" y="594" fill="#aaa" font-size="9" text-anchor="middle" font-family="monospace">GPIO 15 · heartbeat</text>
+  <path d="M 245,582 L 388,354" fill="none" stroke="#ffe082" stroke-width="1.2"/>
+  <rect x="400" y="750" width="300" height="50" fill="#0d1429" stroke="#4dd0e1" stroke-width="1.5" rx="6" ry="6"/>
+  <text x="550" y="767" fill="#4dd0e1" font-size="12" text-anchor="middle" font-family="monospace" font-weight="bold">WiFi (internal) — Soft-AP Mode</text>
+  <text x="550" y="783" fill="#888" font-size="9" text-anchor="middle" font-family="monospace">SSID: SyrupTouch  ·  HTTP :80  ·  DNS :53 (captive portal)</text>
+  <rect x="60" y="640" width="950" height="60" fill="#111" stroke="#555" stroke-width="1" rx="4" ry="4"/>
+  <text x="68" y="656" fill="#aaa" font-size="11" text-anchor="start" font-family="monospace" font-weight="bold">Legend:</text>
+  <rect x="70" y="666" width="12" height="8" fill="#f48fb1"/>
+  <text x="86" y="674" fill="#f48fb1" font-size="8" text-anchor="start" font-family="monospace">SPI bus (MOSI/MISO/SCLK)</text>
+  <rect x="188" y="666" width="12" height="8" fill="#ef9a9a"/>
+  <text x="204" y="674" fill="#ef9a9a" font-size="8" text-anchor="start" font-family="monospace">ILI9341 LCD signals</text>
+  <rect x="306" y="666" width="12" height="8" fill="#80cbc4"/>
+  <text x="322" y="674" fill="#80cbc4" font-size="8" text-anchor="start" font-family="monospace">XPT2046 touch signals</text>
+  <rect x="424" y="666" width="12" height="8" fill="#a5d6a7"/>
+  <text x="440" y="674" fill="#a5d6a7" font-size="8" text-anchor="start" font-family="monospace">TB6612FNG motor control (odd)</text>
+  <rect x="542" y="666" width="12" height="8" fill="#c8e6c9"/>
+  <text x="558" y="674" fill="#c8e6c9" font-size="8" text-anchor="start" font-family="monospace">TB6612FNG motor control (even)</text>
+  <rect x="660" y="666" width="12" height="8" fill="#ffd54f"/>
+  <text x="676" y="674" fill="#ffd54f" font-size="8" text-anchor="start" font-family="monospace">Motor output → pump</text>
+  <rect x="778" y="666" width="12" height="8" fill="#ce93d8"/>
+  <text x="794" y="674" fill="#ce93d8" font-size="8" text-anchor="start" font-family="monospace">Buzzer PWM</text>
+  <rect x="896" y="666" width="12" height="8" fill="#ffe082"/>
+  <text x="912" y="674" fill="#ffe082" font-size="8" text-anchor="start" font-family="monospace">LED heartbeat</text>
+</svg>
