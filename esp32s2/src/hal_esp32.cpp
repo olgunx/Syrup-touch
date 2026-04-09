@@ -107,8 +107,36 @@ void hal_drawString_Turkish(const char *str, int x, int y, int size) {
 // ============================================
 // TOUCH
 // ============================================
+
+// Take multiple SPI readings and accept only if they agree within ±tolerance.
+// Rejects phantom coordinates caused by WiFi radio noise on the shared SPI bus.
+static bool getValidatedTouch(uint16_t &x, uint16_t &y) {
+    const int SAMPLES = 3;
+    const int TOLERANCE = 10;
+    uint16_t xs[SAMPLES], ys[SAMPLES];
+    for (int i = 0; i < SAMPLES; i++) {
+        if (!tft.getTouch(&xs[i], &ys[i], TOUCH_THRESHOLD)) return false;
+    }
+    // Check all samples are within tolerance of the first
+    for (int i = 1; i < SAMPLES; i++) {
+        if (abs((int)xs[i] - (int)xs[0]) > TOLERANCE ||
+            abs((int)ys[i] - (int)ys[0]) > TOLERANCE) return false;
+    }
+    x = xs[0];
+    y = ys[0];
+    return true;
+}
+
 bool hal_getTouch(uint16_t &x, uint16_t &y) {
-    return tft.getTouch(&x, &y, TOUCH_THRESHOLD);
+    // Only poll the XPT2046 when the IRQ pin actually fired (touch detected
+    // by hardware). This prevents phantom reads from WiFi SPI noise.
+    if (!touchPressed) return false;
+    touchPressed = false;
+
+    // Double-check the IRQ pin is still LOW (finger still on screen)
+    if (digitalRead(XPT_IRQ) == HIGH) return false;
+
+    return getValidatedTouch(x, y);
 }
 
 void hal_waitForRelease() {
@@ -116,6 +144,7 @@ void hal_waitForRelease() {
     while (tft.getTouch(&x, &y, TOUCH_THRESHOLD)) {
         delay(20);
     }
+    touchPressed = false;   // clear any ISR that fired during release
     delay(50);
 }
 
