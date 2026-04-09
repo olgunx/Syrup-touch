@@ -455,10 +455,23 @@ static void drawConfigStatusBar() {
     hal_fillRect(0, 0, SCREEN_W, CONFIG_STATUS_H, barBg);
     hal_drawHLine(0, CONFIG_STATUS_H - 1, SCREEN_W, COL_GRAY);
 
-    // "SELECT MIX" label
+    // Build date/time label (DD-MM-YY HH:MM)
+    // __DATE__ = "Mmm DD YYYY", __TIME__ = "HH:MM:SS"
+    static const char _bd[] = __DATE__;   // e.g. "Apr  9 2026"
+    static const char _bt[] = __TIME__;
+    static const char *_months = "JanFebMarAprMayJunJulAugSepOctNovDec";
+    static char _buildStr[20] = {};
+    if (_buildStr[0] == '\0') {
+        int mm = 0;
+        for (int i = 0; i < 12; i++)
+            if (_bd[0]==_months[i*3] && _bd[1]==_months[i*3+1] && _bd[2]==_months[i*3+2]) { mm=i+1; break; }
+        int dd = (_bd[4]==' ' ? 0 : (_bd[4]-'0')*10) + (_bd[5]-'0');
+        int yy = (_bd[9]-'0')*10 + (_bd[10]-'0');
+        snprintf(_buildStr, sizeof(_buildStr), "%02d-%02d-%02d %.5s", dd, mm, yy, _bt);
+    }
     hal_setTextDatum(HAL_DATUM_ML);
-    hal_setTextColor(hal_color(200, 180, 220), barBg);
-    hal_drawString("SELECT MIX", 6, CONFIG_STATUS_H / 2, 2);
+    hal_setTextColor(hal_color(140, 130, 160), barBg);
+    hal_drawString(_buildStr, 6, CONFIG_STATUS_H / 2, 1);
 
     // WiFi toggle button (rounded rect)
     bool on = hal_wifiIsActive();

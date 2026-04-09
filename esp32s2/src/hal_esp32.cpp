@@ -12,6 +12,7 @@
 #include <WiFi.h>
 #include <WebServer.h>
 #include <DNSServer.h>
+#include <Update.h>
 
 // ============================================
 // DISPLAY
@@ -379,6 +380,86 @@ static void handlePostWifi() {
     }
 }
 
+// ============================================
+// OTA FIRMWARE UPDATE
+// ============================================
+static const char OTA_PAGE[] PROGMEM = R"rawhtml(
+<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Firmware Update</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+background:#1a1a2e;color:#e0e0e0;padding:20px;max-width:500px;margin:0 auto}
+h1{text-align:center;color:#00d4aa;margin:20px 0;font-size:1.3em}
+.card{background:#16213e;border-radius:10px;padding:20px;border:1px solid #0f3460;margin-bottom:16px}
+label{display:block;margin-bottom:8px;color:#8892b0;font-size:0.9em}
+input[type=file]{width:100%;padding:10px;background:#0f3460;border:1px solid #1a4080;border-radius:6px;color:#e0e0e0;margin-bottom:12px}
+.btn{display:block;width:100%;padding:12px;border:none;border-radius:8px;font-size:1em;font-weight:600;cursor:pointer;background:#00d4aa;color:#1a1a2e}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.prog{width:100%;height:22px;border-radius:6px;overflow:hidden;background:#0f3460;margin:12px 0;display:none}
+.prog-bar{height:100%;background:#00d4aa;width:0%;transition:width .2s}
+#status{text-align:center;margin-top:12px;font-size:0.95em}
+a{color:#00d4aa;text-decoration:none}
+</style></head><body>
+<h1>&#128268; Firmware Update</h1>
+<div class="card">
+<form id="uf"><label>Select firmware .bin file:</label>
+<input type="file" id="fw" accept=".bin">
+<div class="prog" id="prog"><div class="prog-bar" id="pbar"></div></div>
+<button class="btn" type="submit" id="ubtn">Upload & Install</button></form>
+<div id="status"></div></div>
+<p style="text-align:center;margin-top:16px"><a href="/">&larr; Back to Mixer</a></p>
+<script>
+document.getElementById('uf').onsubmit=function(e){
+  e.preventDefault();
+  const f=document.getElementById('fw').files[0];
+  if(!f){document.getElementById('status').textContent='Select a file first';return;}
+  const xhr=new XMLHttpRequest();
+  const prog=document.getElementById('prog'),pbar=document.getElementById('pbar'),st=document.getElementById('status'),btn=document.getElementById('ubtn');
+  btn.disabled=true;prog.style.display='block';st.textContent='Uploading...';
+  xhr.upload.onprogress=function(ev){if(ev.lengthComputable){const p=Math.round(ev.loaded/ev.total*100);pbar.style.width=p+'%';st.textContent='Uploading: '+p+'%';}};
+  xhr.onload=function(){if(xhr.status===200){st.innerHTML='<b style="color:#00d4aa">Success! Rebooting...</b>';setTimeout(()=>{st.textContent='Reconnect to WiFi and refresh.'},5000);}else{st.textContent='Error: '+xhr.responseText;btn.disabled=false;}};
+  xhr.onerror=function(){st.textContent='Upload failed — connection lost';btn.disabled=false;};
+  const fd=new FormData();fd.append('firmware',f);
+  xhr.open('POST','/api/ota');xhr.send(fd);
+};
+</script></body></html>
+)rawhtml";
+
+static void handleOTAPage() {
+    webServer->send_P(200, "text/html", OTA_PAGE);
+}
+
+static void handleOTAUpload() {
+    HTTPUpload &upload = webServer->upload();
+    if (upload.status == UPLOAD_FILE_START) {
+        Serial.printf("OTA start: %s\n", upload.filename.c_str());
+        if (!Update.begin(UPDATE_SIZE_UNKNOWN)) {
+            hal_log("OTA begin failed");
+        }
+    } else if (upload.status == UPLOAD_FILE_WRITE) {
+        if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+            hal_log("OTA write failed");
+        }
+    } else if (upload.status == UPLOAD_FILE_END) {
+        if (Update.end(true)) {
+            Serial.printf("OTA success: %u bytes\n", upload.totalSize);
+        } else {
+            hal_log("OTA end failed");
+        }
+    }
+}
+
+static void handleOTAResult() {
+    if (Update.hasError()) {
+        webServer->send(500, "text/plain", "Update failed");
+    } else {
+        webServer->send(200, "text/plain", "OK — rebooting...");
+        delay(500);
+        ESP.restart();
+    }
+}
+
 bool hal_wifiStart() {
     if (wifiActive) return true;
 
@@ -400,6 +481,9 @@ bool hal_wifiStart() {
     webServer->on("/api/mixes", HTTP_POST, handlePostMixes);
     webServer->on("/api/wifi", HTTP_GET, handleGetWifi);
     webServer->on("/api/wifi", HTTP_POST, handlePostWifi);
+    // OTA firmware update
+    webServer->on("/update", HTTP_GET, handleOTAPage);
+    webServer->on("/api/ota", HTTP_POST, handleOTAResult, handleOTAUpload);
     // Captive portal detection endpoints
     webServer->on("/generate_204", HTTP_GET, handleCaptivePortal);     // Android
     webServer->on("/gen_204", HTTP_GET, handleCaptivePortal);           // Android

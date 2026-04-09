@@ -44,6 +44,9 @@ color:#e0e0e0;padding:6px 10px;font-size:0.95em}
 font-weight:600;cursor:pointer;font-size:0.9em;margin-top:4px}
 .btn-wifi:active{opacity:.7}
 .wifi-note{font-size:0.78em;color:#8892b0;margin-top:6px}
+.ota-link{text-align:center;margin-bottom:16px}
+.ota-link a{color:#e67e22;font-weight:600;text-decoration:none;font-size:0.95em}
+.ota-link a:hover{text-decoration:underline}
 </style>
 </head>
 <body>
@@ -55,6 +58,7 @@ font-weight:600;cursor:pointer;font-size:0.9em;margin-top:4px}
 <button class="btn-wifi" onclick="saveWifi()">Save WiFi</button>
 <div class="wifi-note">Changes take effect after WiFi is toggled off/on from the device.</div>
 </div>
+<div class="ota-link"><a href="/update">&#128268; Firmware Update</a></div>
 <div id="mixes"></div>
 <div class="btn-row">
 <button class="btn btn-reload" onclick="load()">Reload</button>
