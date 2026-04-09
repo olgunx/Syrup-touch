@@ -301,9 +301,8 @@ static void saveMixes() {
         pos += snprintf(buf + pos, sizeof(buf) - pos, "  \"%d\": {\n", m);
         for (int s = 1; s <= 8; s++) {
             pos += snprintf(buf + pos, sizeof(buf) - pos,
-                            "    \"syrup_%d\": %d%s\n",
-                            s, syrupData[m - 1][s - 1],
-                            (s < 8) ? "," : "");
+                            "    \"syrup_%d\": %d,\n",
+                            s, syrupData[m - 1][s - 1]);
         }
         // Write mix name as JSON array
         pos += snprintf(buf + pos, sizeof(buf) - pos,

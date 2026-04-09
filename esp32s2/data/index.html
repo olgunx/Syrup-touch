@@ -59,6 +59,10 @@ font-weight:600;cursor:pointer;font-size:0.9em;margin-top:4px}
 <div class="wifi-note">Changes take effect after WiFi is toggled off/on from the device.</div>
 </div>
 <div class="ota-link"><a href="/update">&#128268; Firmware Update</a></div>
+<div class="btn-row" style="margin-bottom:12px">
+<button class="btn" style="background:#0f3460;color:#e0e0e0;border:1px solid #1a4080" onclick="exportMixes()">&#128229; Export Mixes</button>
+<label class="btn" style="background:#e67e22;color:#fff;cursor:pointer">&#128228; Import Mixes<input type="file" accept=".json" style="display:none" onchange="importMixes(this)"></label>
+</div>
 <div id="mixes"></div>
 <div class="btn-row">
 <button class="btn btn-reload" onclick="load()">Reload</button>
@@ -138,6 +142,23 @@ function saveWifi(){
   .catch(()=>toast('Save failed!'));
 }
 loadWifi();
+function exportMixes(){
+  window.location.href='/api/export';
+}
+function importMixes(el){
+  const f=el.files[0];
+  if(!f)return;
+  const r=new FileReader();
+  r.onload=function(){
+    try{JSON.parse(r.result);}catch(e){toast('Invalid JSON file!');return;}
+    fetch('/api/import',{method:'POST',headers:{'Content-Type':'application/json'},body:r.result})
+    .then(res=>{if(!res.ok)throw 0;return res.json();})
+    .then(()=>{toast('Imported! Reloading...');setTimeout(load,500);})
+    .catch(()=>toast('Import failed!'));
+  };
+  r.readAsText(f);
+  el.value='';
+}
 </script>
 </body>
 </html>

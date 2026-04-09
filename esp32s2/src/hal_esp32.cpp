@@ -313,6 +313,37 @@ static void handlePostMixes() {
     }
 }
 
+// Export: download syrup_mixes.json as a file
+static void handleExportMixes() {
+    File f = LittleFS.open("/syrup_mixes.json", "r");
+    if (!f) {
+        webServer->send(404, "text/plain", "No mixes file");
+        return;
+    }
+    webServer->sendHeader("Content-Disposition", "attachment; filename=syrup_mixes.json");
+    webServer->streamFile(f, "application/json");
+    f.close();
+}
+
+// Import: upload syrup_mixes.json file
+static void handleImportMixes() {
+    if (!webServer->hasArg("plain")) {
+        webServer->send(400, "application/json", "{\"error\":\"no body\"}");
+        return;
+    }
+    String body = webServer->arg("plain");
+    if (body.length() < 2 || body.length() > 4000) {
+        webServer->send(400, "application/json", "{\"error\":\"invalid size\"}");
+        return;
+    }
+    if (hal_writeFile("/syrup_mixes.json", body.c_str(), body.length())) {
+        mixesUpdatedFlag = true;
+        webServer->send(200, "application/json", "{\"ok\":true}");
+    } else {
+        webServer->send(500, "application/json", "{\"error\":\"write failed\"}");
+    }
+}
+
 static void handleIndex() {
     File f = LittleFS.open("/index.html", "r");
     if (!f) {
@@ -385,44 +416,65 @@ static void handlePostWifi() {
 // ============================================
 static const char OTA_PAGE[] PROGMEM = R"rawhtml(
 <!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Firmware Update</title>
+<title>Device Update</title>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
 background:#1a1a2e;color:#e0e0e0;padding:20px;max-width:500px;margin:0 auto}
 h1{text-align:center;color:#00d4aa;margin:20px 0;font-size:1.3em}
 .card{background:#16213e;border-radius:10px;padding:20px;border:1px solid #0f3460;margin-bottom:16px}
+.card h2{font-size:1em;color:#00d4aa;margin-bottom:10px}
 label{display:block;margin-bottom:8px;color:#8892b0;font-size:0.9em}
 input[type=file]{width:100%;padding:10px;background:#0f3460;border:1px solid #1a4080;border-radius:6px;color:#e0e0e0;margin-bottom:12px}
 .btn{display:block;width:100%;padding:12px;border:none;border-radius:8px;font-size:1em;font-weight:600;cursor:pointer;background:#00d4aa;color:#1a1a2e}
+.btn-fs{background:#e67e22;color:#fff}
 .btn:disabled{opacity:.5;cursor:not-allowed}
 .prog{width:100%;height:22px;border-radius:6px;overflow:hidden;background:#0f3460;margin:12px 0;display:none}
-.prog-bar{height:100%;background:#00d4aa;width:0%;transition:width .2s}
-#status{text-align:center;margin-top:12px;font-size:0.95em}
+.prog-bar{height:100%;width:0%;transition:width .2s}
+.pb-fw{background:#00d4aa}
+.pb-fs{background:#e67e22}
+.st{text-align:center;margin-top:12px;font-size:0.95em}
 a{color:#00d4aa;text-decoration:none}
+.note{font-size:0.78em;color:#8892b0;margin-top:8px}
 </style></head><body>
-<h1>&#128268; Firmware Update</h1>
+<h1>&#128268; Device Update</h1>
 <div class="card">
-<form id="uf"><label>Select firmware .bin file:</label>
+<h2>Firmware (.bin)</h2>
+<form id="uf"><label>Select firmware.bin:</label>
 <input type="file" id="fw" accept=".bin">
-<div class="prog" id="prog"><div class="prog-bar" id="pbar"></div></div>
-<button class="btn" type="submit" id="ubtn">Upload & Install</button></form>
-<div id="status"></div></div>
+<div class="prog" id="prog"><div class="prog-bar pb-fw" id="pbar"></div></div>
+<button class="btn" type="submit" id="ubtn">Upload Firmware</button></form>
+<div class="st" id="status"></div>
+<div class="note">.pio/build/lolin_s2_mini/firmware.bin</div>
+</div>
+<div class="card">
+<h2>Filesystem (.bin)</h2>
+<form id="uf2"><label>Select littlefs.bin:</label>
+<input type="file" id="fs" accept=".bin">
+<div class="prog" id="prog2"><div class="prog-bar pb-fs" id="pbar2"></div></div>
+<button class="btn btn-fs" type="submit" id="ubtn2">Upload Filesystem</button></form>
+<div class="st" id="status2"></div>
+<div class="note">.pio/build/lolin_s2_mini/littlefs.bin</div>
+</div>
 <p style="text-align:center;margin-top:16px"><a href="/">&larr; Back to Mixer</a></p>
 <script>
-document.getElementById('uf').onsubmit=function(e){
-  e.preventDefault();
-  const f=document.getElementById('fw').files[0];
-  if(!f){document.getElementById('status').textContent='Select a file first';return;}
-  const xhr=new XMLHttpRequest();
-  const prog=document.getElementById('prog'),pbar=document.getElementById('pbar'),st=document.getElementById('status'),btn=document.getElementById('ubtn');
-  btn.disabled=true;prog.style.display='block';st.textContent='Uploading...';
-  xhr.upload.onprogress=function(ev){if(ev.lengthComputable){const p=Math.round(ev.loaded/ev.total*100);pbar.style.width=p+'%';st.textContent='Uploading: '+p+'%';}};
-  xhr.onload=function(){if(xhr.status===200){st.innerHTML='<b style="color:#00d4aa">Success! Rebooting...</b>';setTimeout(()=>{st.textContent='Reconnect to WiFi and refresh.'},5000);}else{st.textContent='Error: '+xhr.responseText;btn.disabled=false;}};
-  xhr.onerror=function(){st.textContent='Upload failed — connection lost';btn.disabled=false;};
-  const fd=new FormData();fd.append('firmware',f);
-  xhr.open('POST','/api/ota');xhr.send(fd);
-};
+function doUpload(formId,fileId,progId,barId,stId,btnId,url){
+  document.getElementById(formId).onsubmit=function(e){
+    e.preventDefault();
+    const f=document.getElementById(fileId).files[0];
+    if(!f){document.getElementById(stId).textContent='Select a file first';return;}
+    const xhr=new XMLHttpRequest();
+    const prog=document.getElementById(progId),pbar=document.getElementById(barId),st=document.getElementById(stId),btn=document.getElementById(btnId);
+    btn.disabled=true;prog.style.display='block';st.textContent='Uploading...';
+    xhr.upload.onprogress=function(ev){if(ev.lengthComputable){const p=Math.round(ev.loaded/ev.total*100);pbar.style.width=p+'%';st.textContent='Uploading: '+p+'%';}};
+    xhr.onload=function(){if(xhr.status===200){st.innerHTML='<b style="color:#00d4aa">Success! Rebooting...</b>';setTimeout(()=>{st.textContent='Reconnect to WiFi and refresh.'},5000);}else{st.textContent='Error: '+xhr.responseText;btn.disabled=false;}};
+    xhr.onerror=function(){st.textContent='Upload failed \u2014 connection lost';btn.disabled=false;};
+    const fd=new FormData();fd.append('firmware',f);
+    xhr.open('POST',url);xhr.send(fd);
+  };
+}
+doUpload('uf','fw','prog','pbar','status','ubtn','/api/ota');
+doUpload('uf2','fs','prog2','pbar2','status2','ubtn2','/api/ota-fs');
 </script></body></html>
 )rawhtml";
 
@@ -459,7 +511,26 @@ static void handleOTAResult() {
         ESP.restart();
     }
 }
-
+// Filesystem (LittleFS) OTA upload
+static void handleFSOTAUpload() {
+    HTTPUpload &upload = webServer->upload();
+    if (upload.status == UPLOAD_FILE_START) {
+        Serial.printf("FS OTA start: %s\n", upload.filename.c_str());
+        if (!Update.begin(UPDATE_SIZE_UNKNOWN, U_SPIFFS)) {
+            hal_log("FS OTA begin failed");
+        }
+    } else if (upload.status == UPLOAD_FILE_WRITE) {
+        if (Update.write(upload.buf, upload.currentSize) != upload.currentSize) {
+            hal_log("FS OTA write failed");
+        }
+    } else if (upload.status == UPLOAD_FILE_END) {
+        if (Update.end(true)) {
+            Serial.printf("FS OTA success: %u bytes\n", upload.totalSize);
+        } else {
+            hal_log("FS OTA end failed");
+        }
+    }
+}
 bool hal_wifiStart() {
     if (wifiActive) return true;
 
@@ -481,9 +552,12 @@ bool hal_wifiStart() {
     webServer->on("/api/mixes", HTTP_POST, handlePostMixes);
     webServer->on("/api/wifi", HTTP_GET, handleGetWifi);
     webServer->on("/api/wifi", HTTP_POST, handlePostWifi);
-    // OTA firmware update
+    webServer->on("/api/export", HTTP_GET, handleExportMixes);
+    webServer->on("/api/import", HTTP_POST, handleImportMixes);
+    // OTA firmware + filesystem update
     webServer->on("/update", HTTP_GET, handleOTAPage);
     webServer->on("/api/ota", HTTP_POST, handleOTAResult, handleOTAUpload);
+    webServer->on("/api/ota-fs", HTTP_POST, handleOTAResult, handleFSOTAUpload);
     // Captive portal detection endpoints
     webServer->on("/generate_204", HTTP_GET, handleCaptivePortal);     // Android
     webServer->on("/gen_204", HTTP_GET, handleCaptivePortal);           // Android
