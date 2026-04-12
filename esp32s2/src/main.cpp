@@ -40,6 +40,9 @@ static void fillRoundRect(int x, int y, int w, int h, int r, HalColor c) {
 enum AppState { MAIN_MENU, VIEW_MIX, SELECT_MIX, EDIT_DASHBOARD };
 AppState appState = MAIN_MENU;
 
+enum UiLanguage { LANG_EN = 0, LANG_TR = 1 };
+static UiLanguage currentLanguage = LANG_EN;
+
 // ============================================
 // MIX DATA — syrupData[mix 0-8][syrup 0-7]
 // ============================================
@@ -201,7 +204,305 @@ static bool touchInRect(uint16_t tx, uint16_t ty,
 // BUZZER HELPERS
 // ============================================
 static const char *BUZZER_CONFIG_FILE = "/buzzer_config.json";
+static const char *LANGUAGE_CONFIG_FILE = "/language_config.json";
+static const char *UI_TRANSLATIONS_FILE = "/ui_translations.csv";
 static bool buzzerEnabled = true;
+
+enum UiTextId {
+    TXT_STATUS_TITLE,
+    TXT_STATUS_HINT,
+    TXT_RESERVED,
+    TXT_BUILD,
+    TXT_WIFI_ON,
+    TXT_WIFI_OFF,
+    TXT_BUZZER,
+    TXT_ON,
+    TXT_OFF,
+    TXT_LANGUAGE,
+    TXT_LANG_DETAIL_EN,
+    TXT_LANG_DETAIL_TR,
+    TXT_SAVE,
+    TXT_BACK,
+    TXT_POUR,
+    TXT_VIEW_TITLE_FMT,
+    TXT_SYRUP_LABEL_FMT,
+    TXT_PAUSED_MIX_FMT,
+    TXT_POURING_MIX_FMT,
+    TXT_STOP,
+    TXT_RESUME,
+    TXT_PAUSE,
+    TXT_OVERALL_FMT,
+    TXT_TIME_REMAINING_FMT,
+    TXT_ACTIVE_MOTORS_FMT,
+    TXT_POUR_COMPLETE,
+    TXT_POUR_STOPPED,
+    TXT_SUMMARY_MIX_FMT,
+    TXT_SUMMARY_TIME_FMT,
+    TXT_SUMMARY_MOTORS_FMT,
+    TXT_SUMMARY_VOLUME_FMT,
+    TXT_OK,
+    TXT_COUNT,
+};
+
+static const size_t UI_TEXT_MAX_LEN = 64;
+static char uiTextTable[2][TXT_COUNT][UI_TEXT_MAX_LEN];
+
+struct UiTextKeyMap {
+    const char *key;
+    UiTextId id;
+};
+
+static const UiTextKeyMap UI_TEXT_KEYS[] = {
+    {"status_title", TXT_STATUS_TITLE},
+    {"status_hint", TXT_STATUS_HINT},
+    {"reserved", TXT_RESERVED},
+    {"build_label", TXT_BUILD},
+    {"wifi_on", TXT_WIFI_ON},
+    {"wifi_off", TXT_WIFI_OFF},
+    {"buzzer_label", TXT_BUZZER},
+    {"state_on", TXT_ON},
+    {"state_off", TXT_OFF},
+    {"language_label", TXT_LANGUAGE},
+    {"language_detail_en", TXT_LANG_DETAIL_EN},
+    {"language_detail_tr", TXT_LANG_DETAIL_TR},
+    {"save", TXT_SAVE},
+    {"back", TXT_BACK},
+    {"pour", TXT_POUR},
+    {"view_title_fmt", TXT_VIEW_TITLE_FMT},
+    {"syrup_label_fmt", TXT_SYRUP_LABEL_FMT},
+    {"paused_mix_fmt", TXT_PAUSED_MIX_FMT},
+    {"pouring_mix_fmt", TXT_POURING_MIX_FMT},
+    {"stop", TXT_STOP},
+    {"resume", TXT_RESUME},
+    {"pause", TXT_PAUSE},
+    {"overall_fmt", TXT_OVERALL_FMT},
+    {"time_remaining_fmt", TXT_TIME_REMAINING_FMT},
+    {"active_motors_fmt", TXT_ACTIVE_MOTORS_FMT},
+    {"pour_complete", TXT_POUR_COMPLETE},
+    {"pour_stopped", TXT_POUR_STOPPED},
+    {"summary_mix_fmt", TXT_SUMMARY_MIX_FMT},
+    {"summary_time_fmt", TXT_SUMMARY_TIME_FMT},
+    {"summary_motors_fmt", TXT_SUMMARY_MOTORS_FMT},
+    {"summary_volume_fmt", TXT_SUMMARY_VOLUME_FMT},
+    {"ok", TXT_OK},
+};
+
+static bool isTurkishUi() {
+    return currentLanguage == LANG_TR;
+}
+
+static void copyUiText(char dst[UI_TEXT_MAX_LEN], const char *src) {
+    strncpy(dst, src, UI_TEXT_MAX_LEN - 1);
+    dst[UI_TEXT_MAX_LEN - 1] = '\0';
+}
+
+static void initDefaultUiTexts() {
+    static const char *EN[TXT_COUNT] = {
+        "SYRUP MIXER",
+        "LONG PRESS TO VIEW & POUR",
+        "Reserved",
+        "BUILD:",
+        "WiFi ON",
+        "WiFi OFF",
+        "Buzzer",
+        "ON",
+        "OFF",
+        "Lang",
+        "EN",
+        "TR",
+        "SAVE",
+        "BACK",
+        "POUR",
+        "--- MIX %d CONTENTS ---",
+        "Syrup %d: %d",
+        "PAUSED MIX %d",
+        "POURING MIX %d",
+        "STOP",
+        "RESUME",
+        "PAUSE",
+        "Overall %d%%",
+        "Elapsed: %.1fs Remaining: ~%.1fs",
+        "Active motors (%d/%d total)",
+        "POUR COMPLETE",
+        "POUR STOPPED",
+        "Mix %d",
+        "Time: %.1fs",
+        "Motors: %d",
+        "Volume: %d ml",
+        "OK",
+    };
+    static const char *TR[TXT_COUNT] = {
+        "SURUP MIKSER",
+        "UZUN BAS: GOR VE DOK",
+        "Bos",
+        "DERLEME:",
+        "WiFi Acik",
+        "WiFi Kapali",
+        "Ses",
+        "Acik",
+        "Kapali",
+        "Dil",
+        "EN",
+        "TR",
+        "KAYDET",
+        "GERI",
+        "DOK",
+        "--- KARISIM %d ---",
+        "Surup %d: %d",
+        "BEKLEMEDE %d",
+        "DOKUM KARISIM %d",
+        "DUR",
+        "DEVAM",
+        "BEKLET",
+        "Genel %d%%",
+        "Gecen: %.1fs Kalan: ~%.1fs",
+        "Aktif motor (%d/%d)",
+        "DOKUM TAMAM",
+        "DOKUM DURDU",
+        "Karisim %d",
+        "Sure: %.1fs",
+        "Motor: %d",
+        "Hacim: %d ml",
+        "TAMAM",
+    };
+
+    for (int i = 0; i < TXT_COUNT; i++) {
+        copyUiText(uiTextTable[LANG_EN][i], EN[i]);
+        copyUiText(uiTextTable[LANG_TR][i], TR[i]);
+    }
+}
+
+static char *trimAscii(char *s) {
+    while (*s == ' ' || *s == '\t' || *s == '\r') s++;
+    size_t len = strlen(s);
+    while (len > 0 && (s[len - 1] == ' ' || s[len - 1] == '\t' || s[len - 1] == '\r')) {
+        s[--len] = '\0';
+    }
+    return s;
+}
+
+static int uiTextIdFromKey(const char *key) {
+    for (size_t i = 0; i < sizeof(UI_TEXT_KEYS) / sizeof(UI_TEXT_KEYS[0]); i++) {
+        if (strcmp(UI_TEXT_KEYS[i].key, key) == 0) return (int)UI_TEXT_KEYS[i].id;
+    }
+    return -1;
+}
+
+static void loadUiTranslations() {
+    initDefaultUiTexts();
+
+    char buf[4096];
+    int n = hal_readFile(UI_TRANSLATIONS_FILE, buf, sizeof(buf));
+    if (n <= 0) return;
+
+    char *saveLine = nullptr;
+    for (char *line = strtok_r(buf, "\n", &saveLine);
+         line != nullptr;
+         line = strtok_r(nullptr, "\n", &saveLine)) {
+        char *trimmed = trimAscii(line);
+        if (!trimmed[0] || trimmed[0] == '#') continue;
+
+        char *c1 = strchr(trimmed, ',');
+        if (!c1) continue;
+        *c1 = '\0';
+        char *c2 = strchr(c1 + 1, ',');
+        if (!c2) continue;
+        *c2 = '\0';
+
+        char *key = trimAscii(trimmed);
+        char *en = trimAscii(c1 + 1);
+        char *tr = trimAscii(c2 + 1);
+        if (strcmp(key, "key") == 0) continue;
+
+        int id = uiTextIdFromKey(key);
+        if (id < 0) continue;
+
+        copyUiText(uiTextTable[LANG_EN][id], en);
+        copyUiText(uiTextTable[LANG_TR][id], tr);
+    }
+}
+
+static const char *uiText(UiTextId id) {
+    return uiTextTable[isTurkishUi() ? LANG_TR : LANG_EN][id];
+}
+
+static void uiTextFormat(char *buf, size_t bufSize, UiTextId id, ...) {
+    va_list ap;
+    va_start(ap, id);
+    vsnprintf(buf, bufSize, uiText(id), ap);
+    va_end(ap);
+}
+
+static bool hasNonAscii(const char *str) {
+    if (!str) return false;
+    for (const unsigned char *p = (const unsigned char *)str; *p; ++p) {
+        if (*p >= 128) return true;
+    }
+    return false;
+}
+
+static void transliterateTurkishAscii(const char *src, char *dst, size_t dstSize) {
+    if (!src || !dst || dstSize == 0) return;
+
+    size_t out = 0;
+    for (size_t i = 0; src[i] && out + 1 < dstSize; ) {
+        unsigned char c = (unsigned char)src[i];
+        if (c < 128) {
+            dst[out++] = (char)c;
+            i++;
+            continue;
+        }
+
+        unsigned char c2 = (unsigned char)src[i + 1];
+        char repl = '?';
+        if (c == 0xC3) {
+            if (c2 == 0x87) repl = 'C';
+            else if (c2 == 0xA7) repl = 'c';
+            else if (c2 == 0x96) repl = 'O';
+            else if (c2 == 0xB6) repl = 'o';
+            else if (c2 == 0x9C) repl = 'U';
+            else if (c2 == 0xBC) repl = 'u';
+        } else if (c == 0xC4) {
+            if (c2 == 0x9E) repl = 'G';
+            else if (c2 == 0x9F) repl = 'g';
+            else if (c2 == 0xB0) repl = 'I';
+            else if (c2 == 0xB1) repl = 'i';
+        } else if (c == 0xC5) {
+            if (c2 == 0x9E) repl = 'S';
+            else if (c2 == 0x9F) repl = 's';
+        }
+
+        dst[out++] = repl;
+        i += (c2 != 0) ? 2 : 1;
+    }
+    dst[out] = '\0';
+}
+
+static int turkishSizeForFont(int font) {
+    switch (font) {
+        case 1: return 7;
+        case 2: return 9;
+        default: return 12;
+    }
+}
+
+static void drawUiString(const char *str, int x, int y, int font) {
+    if (font == 1 && hasNonAscii(str)) {
+        char asciiBuf[128];
+        transliterateTurkishAscii(str, asciiBuf, sizeof(asciiBuf));
+        hal_drawString(asciiBuf, x, y, font);
+    } else if (hasNonAscii(str)) {
+        hal_drawString_Turkish(str, x, y, turkishSizeForFont(font));
+    } else {
+        hal_drawString(str, x, y, font);
+    }
+}
+
+static int buttonFontForLabel(const char *label, int preferredFont) {
+    size_t len = label ? strlen(label) : 0;
+    if (preferredFont >= 4 && len >= 5) return 2;
+    return preferredFont;
+}
 
 static void beepTouch() {
     if (!buzzerEnabled) return;
@@ -266,6 +567,24 @@ static void saveBuzzerConfig() {
     int len = snprintf(buf, sizeof(buf), "{\"enabled\":%d}", buzzerEnabled ? 1 : 0);
     if (!hal_writeFile(BUZZER_CONFIG_FILE, buf, len)) {
         log("ERROR: failed to write buzzer config");
+    }
+}
+
+static void loadLanguageConfig() {
+    char buf[64];
+    int n = hal_readFile(LANGUAGE_CONFIG_FILE, buf, sizeof(buf));
+    if (n <= 0) {
+        currentLanguage = LANG_EN;
+        return;
+    }
+    currentLanguage = jsonGetInt(buf, "lang", 0) == 1 ? LANG_TR : LANG_EN;
+}
+
+static void saveLanguageConfig() {
+    char buf[32];
+    int len = snprintf(buf, sizeof(buf), "{\"lang\":%d}", currentLanguage == LANG_TR ? 1 : 0);
+    if (!hal_writeFile(LANGUAGE_CONFIG_FILE, buf, len)) {
+        log("ERROR: failed to write language config");
     }
 }
 
@@ -398,10 +717,10 @@ static void drawStatusBar() {
     hal_drawHLine(0, STATUS_H - 1, SCREEN_W, COL_GRAY);
     hal_setTextDatum(HAL_DATUM_ML);
     hal_setTextColor(hal_color(180, 180, 200), hal_color(20, 20, 30));
-    hal_drawString("SYRUP MIXER", 6, STATUS_H / 2, 1);
+    drawUiString(uiText(TXT_STATUS_TITLE), 6, STATUS_H / 2, 1);
     hal_setTextDatum(HAL_DATUM_MR);
     hal_setTextColor(hal_color(180, 180, 200), hal_color(20, 20, 30));
-    hal_drawString("LONG PRESS TO VIEW & POUR", SCREEN_W - 24, STATUS_H / 2, 1);
+    drawUiString(uiText(TXT_STATUS_HINT), SCREEN_W - 24, STATUS_H / 2, 1);
     drawWifiIcon();
 }
 
@@ -496,11 +815,11 @@ static void drawConfigToggleButton(int x, int y, int w, int h,
 
     hal_setTextDatum(HAL_DATUM_ML);
     hal_setTextColor(COL_WHITE, btnBg);
-    hal_drawString(label, dotX + 10, dotY - 6, 1);
+    drawUiString(label, dotX + 10, dotY - 6, 1);
 
     HalColor detailColor = on ? hal_color(200, 200, 120) : hal_color(160, 160, 170);
     hal_setTextColor(detailColor, btnBg);
-    hal_drawString(detail, dotX + 10, dotY + 7, 1);
+    drawUiString(detail, dotX + 10, dotY + 7, 1);
 }
 
 static void drawConfigReservedButton(int x, int y, int w, int h) {
@@ -508,7 +827,7 @@ static void drawConfigReservedButton(int x, int y, int w, int h) {
     fillRoundRect(x, y, w, h, 6, btnBg);
     hal_setTextDatum(HAL_DATUM_MC);
     hal_setTextColor(hal_color(150, 150, 160), btnBg);
-    hal_drawString("Reserved", x + w / 2, y + h / 2 - 5, 1);
+    drawUiString(uiText(TXT_RESERVED), x + w / 2, y + h / 2 - 5, 1);
     hal_setTextColor(hal_color(110, 110, 120), btnBg);
     hal_drawString("--", x + w / 2, y + h / 2 + 7, 1);
 }
@@ -536,8 +855,8 @@ static void drawConfigStatusBar() {
     }
     hal_setTextDatum(HAL_DATUM_ML);
     hal_setTextColor(hal_color(140, 130, 160), barBg);
-    hal_drawString("BUILD:", 6, 10, 1);
-    hal_drawString(_buildStr, 6, 24, 1);
+    drawUiString(uiText(TXT_BUILD), 6, 10, 1);
+    drawUiString(_buildStr, 6, 24, 1);
 
     // WiFi toggle button (original top row layout)
     bool on = hal_wifiIsActive();
@@ -555,14 +874,14 @@ static void drawConfigStatusBar() {
     hal_setTextDatum(HAL_DATUM_ML);
     if (on) {
         hal_setTextColor(COL_WHITE, btnBg);
-        hal_drawString("WiFi ON", dotX + 10, dotY - 6, 1);
+        drawUiString(uiText(TXT_WIFI_ON), dotX + 10, dotY - 6, 1);
         char info[64];
         snprintf(info, sizeof(info), "%s  pw:%s", hal_wifiGetSSID(), hal_wifiGetPass());
         hal_setTextColor(hal_color(200, 200, 120), btnBg);
-        hal_drawString(info, dotX + 10, dotY + 7, 1);
+        drawUiString(info, dotX + 10, dotY + 7, 1);
     } else {
         hal_setTextColor(hal_color(160, 160, 170), btnBg);
-        hal_drawString("WiFi OFF", dotX + 10, dotY, 1);
+        drawUiString(uiText(TXT_WIFI_OFF), dotX + 10, dotY, 1);
     }
 
     for (int slot = 0; slot < 4; slot++) {
@@ -570,8 +889,14 @@ static void drawConfigStatusBar() {
         if (slot == 0) {
             drawConfigToggleButton(slotX, CFG_BUZZER_BTN_Y,
                                    CFG_BUZZER_BTN_W, CFG_BUZZER_BTN_H,
-                                   buzzerEnabled, "Buzzer",
-                                   buzzerEnabled ? "ON" : "OFF");
+                                   buzzerEnabled, uiText(TXT_BUZZER),
+                                   buzzerEnabled ? uiText(TXT_ON) : uiText(TXT_OFF));
+        } else if (slot == 1) {
+            drawConfigToggleButton(slotX, CFG_BUZZER_BTN_Y,
+                                   CFG_BUZZER_SLOT_W, CFG_BUZZER_BTN_H,
+                                   currentLanguage == LANG_TR,
+                                   uiText(TXT_LANGUAGE),
+                                   currentLanguage == LANG_TR ? uiText(TXT_LANG_DETAIL_TR) : uiText(TXT_LANG_DETAIL_EN));
         } else {
             drawConfigReservedButton(slotX, CFG_BUZZER_BTN_Y,
                                      CFG_BUZZER_SLOT_W, CFG_BUZZER_BTN_H);
@@ -693,7 +1018,8 @@ static void drawEditDashboard() {
                 hal_drawRect(x1, y1, BOX_W, BOX_H, COL_WHITE);
                 hal_setTextDatum(HAL_DATUM_MC);
                 hal_setTextColor(COL_WHITE, COL_RED);
-                hal_drawString("SAVE", cx, cy, 4);
+                const char *saveLabel = uiText(TXT_SAVE);
+                drawUiString(saveLabel, cx, cy, buttonFontForLabel(saveLabel, 4));
             } else {
                 hal_fillRect(x1, y1, BOX_W, BOX_H, COL_TEAL);
                 hal_drawRect(x1, y1, BOX_W, BOX_H, COL_WHITE);
@@ -736,19 +1062,19 @@ static void drawViewMix(int mixId, const char *activeButton = nullptr) {
     hal_setTextDatum(HAL_DATUM_TC);
     hal_setTextColor(COL_YELLOW, COL_DARK_TEAL);
     char title[32];
-    snprintf(title, sizeof(title), "--- MIX %d CONTENTS ---", mixId);
-    hal_drawString(title, 160, 10, 2);
+    uiTextFormat(title, sizeof(title), TXT_VIEW_TITLE_FMT, mixId);
+    drawUiString(title, 160, 10, 2);
 
     // Syrup values — two columns
     hal_setTextDatum(HAL_DATUM_MC);
     hal_setTextColor(COL_WHITE, COL_DARK_TEAL);
     for (int i = 0; i < 4; i++) {
         int y = 55 + i * 28;
-        char left[20], right[20];
-        snprintf(left,  sizeof(left),  "Syrup %d:  %d", i + 1, syrupData[mixId - 1][i]);
-        snprintf(right, sizeof(right), "Syrup %d:  %d", i + 5, syrupData[mixId - 1][i + 4]);
-        hal_drawString(left,  80,  y, 2);
-        hal_drawString(right, 240, y, 2);
+        char left[32], right[32];
+        uiTextFormat(left, sizeof(left), TXT_SYRUP_LABEL_FMT, i + 1, syrupData[mixId - 1][i]);
+        uiTextFormat(right, sizeof(right), TXT_SYRUP_LABEL_FMT, i + 5, syrupData[mixId - 1][i + 4]);
+        drawUiString(left,  80,  y, 2);
+        drawUiString(right, 240, y, 2);
     }
 
     // BACK button (moved up by 10px)
@@ -758,7 +1084,7 @@ static void drawViewMix(int mixId, const char *activeButton = nullptr) {
     hal_drawRect(10, 170, 140, 45, COL_WHITE);
     hal_setTextDatum(HAL_DATUM_MC);
     hal_setTextColor(COL_WHITE, backCol);
-    hal_drawString("BACK", 80, 192, 4);
+    drawUiString(uiText(TXT_BACK), 80, 192, 4);
 
     // POUR button (moved up by 10px)
     HalColor pourCol = (activeButton && strcmp(activeButton, "POUR") == 0)
@@ -766,7 +1092,7 @@ static void drawViewMix(int mixId, const char *activeButton = nullptr) {
     hal_fillRect(170, 170, 140, 45, pourCol);
     hal_drawRect(170, 170, 140, 45, COL_WHITE);
     hal_setTextColor(COL_WHITE, pourCol);
-    hal_drawString("POUR", 240, 192, 4);
+    drawUiString(uiText(TXT_POUR), 240, 192, 4);
 }
 
 // --- Pouring progress screen: static layout (call once) ---
@@ -777,13 +1103,13 @@ static void drawPouringLayout(int mixId, int totalMotors, bool paused) {
     hal_setTextDatum(HAL_DATUM_TC);
     char titleBuf[24];
     if (paused) {
-        snprintf(titleBuf, sizeof(titleBuf), "PAUSED MIX %d", mixId);
+        uiTextFormat(titleBuf, sizeof(titleBuf), TXT_PAUSED_MIX_FMT, mixId);
         hal_setTextColor(COL_PAUSE_TITLE, COL_DARK_BLUE);
     } else {
-        snprintf(titleBuf, sizeof(titleBuf), "POURING MIX %d", mixId);
+        uiTextFormat(titleBuf, sizeof(titleBuf), TXT_POURING_MIX_FMT, mixId);
         hal_setTextColor(COL_TITLE_YELLOW, COL_DARK_BLUE);
     }
-    hal_drawString(titleBuf, 160, 8, 2);
+    drawUiString(titleBuf, 160, 8, 2);
 
     // Overall progress bar track (flat rectangle, no outline)
     const int barX = 20, barY = 52, barW = 280, barH = 24;
@@ -806,19 +1132,19 @@ static void drawPouringLayout(int mixId, int totalMotors, bool paused) {
     hal_drawRect(20, btnY, 138, btnH, hal_color(255, 100, 100));
     hal_setTextDatum(HAL_DATUM_MC);
     hal_setTextColor(COL_WHITE, COL_STOP);
-    hal_drawString("STOP", 89, btnY + btnH / 2, 2);
+    drawUiString(uiText(TXT_STOP), 89, btnY + btnH / 2, 2);
 
     // PAUSE / RESUME button
     if (paused) {
         hal_fillRect(166, btnY, 138, btnH, COL_RESUME);
         hal_drawRect(166, btnY, 138, btnH, hal_color(100, 220, 100));
         hal_setTextColor(COL_WHITE, COL_RESUME);
-        hal_drawString("RESUME", 235, btnY + btnH / 2, 2);
+        drawUiString(uiText(TXT_RESUME), 235, btnY + btnH / 2, 2);
     } else {
         hal_fillRect(166, btnY, 138, btnH, COL_PAUSE);
         hal_drawRect(166, btnY, 138, btnH, hal_color(255, 200, 80));
         hal_setTextColor(COL_WHITE, COL_PAUSE);
-        hal_drawString("PAUSE", 235, btnY + btnH / 2, 2);
+        drawUiString(uiText(TXT_PAUSE), 235, btnY + btnH / 2, 2);
     }
 }
 
@@ -835,8 +1161,9 @@ static void updatePouringScreen(int mixId,
     hal_fillRect(0, 24, 320, 22, COL_DARK_BLUE);
     hal_setTextDatum(HAL_DATUM_TC);
     hal_setTextColor(COL_WHITE, COL_DARK_BLUE);
-    char pctStr[24]; snprintf(pctStr, sizeof(pctStr), "Overall  %d%%", pct);
-    hal_drawString(pctStr, 160, 32, 2);
+    char pctStr[24];
+    uiTextFormat(pctStr, sizeof(pctStr), TXT_OVERALL_FMT, pct);
+    drawUiString(pctStr, 160, 32, 2);
 
     // Overall progress bar fill (flat rectangle, no rounded corners)
     const int barX = 20, barY = 52, barW = 280, barH = 24;
@@ -853,7 +1180,7 @@ static void updatePouringScreen(int mixId,
     hal_setTextDatum(HAL_DATUM_MC);
     char volStr[24]; snprintf(volStr, sizeof(volStr), "%.1f/%.0f ml", overallDone * 10.0f, overallTotal * 10.0f);
     hal_setTextColor(COL_WHITE);
-    hal_drawString(volStr, 160, barY + barH / 2, 1);
+    drawUiString(volStr, 160, barY + barH / 2, 1);
 
     // Time info
     hal_fillRect(0, 84, 320, 18, COL_DARK_BLUE);
@@ -862,15 +1189,15 @@ static void updatePouringScreen(int mixId,
         : 0;
     if (remaining < 0) remaining = 0;
     char timeStr[48];
-    snprintf(timeStr, sizeof(timeStr), "Elapsed: %.1fs  Remaining: ~%.1fs", elapsedSec, remaining);
+    uiTextFormat(timeStr, sizeof(timeStr), TXT_TIME_REMAINING_FMT, elapsedSec, remaining);
     hal_setTextColor(COL_LIGHT_GRAY, COL_DARK_BLUE);
-    hal_drawString(timeStr, 160, 92, 1);
+    drawUiString(timeStr, 160, 92, 1);
 
     // Active motors label
     hal_fillRect(0, 112, 320, 18, COL_DARK_BLUE);
     char activeStr[32];
-    snprintf(activeStr, sizeof(activeStr), "Active motors (%d/%d total)", mCount, totalMotors);
-    hal_drawString(activeStr, 160, 120, 1);
+    uiTextFormat(activeStr, sizeof(activeStr), TXT_ACTIVE_MOTORS_FMT, mCount, totalMotors);
+    drawUiString(activeStr, 160, 120, 1);
 
     // Per-motor progress bars (flat rectangles, no rounded corners)
     for (int i = 0; i < MAX_CONCURRENT; i++) {
@@ -885,7 +1212,7 @@ static void updatePouringScreen(int mixId,
             snprintf(label, sizeof(label), "M%d: %d%%", mDisp[i].id, mDisp[i].fracPercent);
             hal_setTextDatum(HAL_DATUM_ML);
             hal_setTextColor(COL_LIGHT_GRAY, COL_DARK_BLUE);
-            hal_drawString(label, 20, yBase, 1);
+            drawUiString(label, 20, yBase, 1);
 
             int mfW = mbW * mDisp[i].fracPercent / 100;
             if (mfW > 0)
@@ -902,10 +1229,10 @@ static void drawSummaryScreen(int mixId, PourStatus status,
     hal_setTextDatum(HAL_DATUM_TC);
     if (status == POUR_COMPLETE) {
         hal_setTextColor(hal_color(0, 220, 80), COL_DARK_BLUE);
-        hal_drawString("POUR COMPLETE", 160, 22, 4);
+        drawUiString(uiText(TXT_POUR_COMPLETE), 160, 22, 4);
     } else {
         hal_setTextColor(hal_color(220, 60, 60), COL_DARK_BLUE);
-        hal_drawString("POUR STOPPED", 160, 22, 4);
+        drawUiString(uiText(TXT_POUR_STOPPED), 160, 22, 4);
     }
 
     hal_drawHLine(40, 55, 240, COL_GRAY);
@@ -913,23 +1240,26 @@ static void drawSummaryScreen(int mixId, PourStatus status,
     hal_setTextDatum(HAL_DATUM_MC);
     char buf[32];
     hal_setTextColor(COL_WHITE, COL_DARK_BLUE);
-    snprintf(buf, sizeof(buf), "Mix %d", mixId);
-    hal_drawString(buf, 160, 80, 2);
+    uiTextFormat(buf, sizeof(buf), TXT_SUMMARY_MIX_FMT, mixId);
+    drawUiString(buf, 160, 80, 2);
 
     hal_setTextColor(COL_LIGHT_GRAY, COL_DARK_BLUE);
-    snprintf(buf, sizeof(buf), "Time: %.1fs", elapsed);
-    hal_drawString(buf, 160, 110, 2);
-    snprintf(buf, sizeof(buf), "Motors: %d", motorsUsed);
-    hal_drawString(buf, 160, 140, 2);
-    snprintf(buf, sizeof(buf), "Volume: %d ml", totalUnits * 10);
-    hal_drawString(buf, 160, 170, 2);
+    uiTextFormat(buf, sizeof(buf), TXT_SUMMARY_TIME_FMT, elapsed);
+    drawUiString(buf, 160, 110, 2);
+    uiTextFormat(buf, sizeof(buf), TXT_SUMMARY_MOTORS_FMT, motorsUsed);
+    drawUiString(buf, 160, 140, 2);
+    uiTextFormat(buf, sizeof(buf), TXT_SUMMARY_VOLUME_FMT, totalUnits * 10);
+    drawUiString(buf, 160, 170, 2);
 
     // OK button
-    hal_fillRect(110, 195, 100, 38, COL_OK_BTN);
-    hal_drawRect(110, 195, 100, 38, hal_color(100, 180, 255));
+    const int okBtnW = 140;
+    const int okBtnX = (SCREEN_W - okBtnW) / 2;
+    hal_fillRect(okBtnX, 195, okBtnW, 38, COL_OK_BTN);
+    hal_drawRect(okBtnX, 195, okBtnW, 38, hal_color(100, 180, 255));
     hal_setTextDatum(HAL_DATUM_MC);
     hal_setTextColor(COL_WHITE, COL_OK_BTN);
-    hal_drawString("OK", 160, 214, 4);
+    const char *okLabel = uiText(TXT_OK);
+    drawUiString(okLabel, 160, 214, buttonFontForLabel(okLabel, 4));
 }
 
 // ============================================
@@ -1122,6 +1452,8 @@ void app_setup() {
     initColors();
 
     // Persistent config
+    loadUiTranslations();
+    loadLanguageConfig();
     loadBuzzerConfig();
 
     // Mix data
@@ -1194,7 +1526,17 @@ void app_loop() {
             buzzerEnabled = !buzzerEnabled;
             saveBuzzerConfig();
             if (!wasEnabled && buzzerEnabled) beepTouch();
-            drawConfigStatusBar();
+            drawSelectMix();
+            hal_delay(300);
+        } else if (touchInRect(tx, ty,
+                               CFG_BUZZER_ROW_X + (CFG_BUZZER_SLOT_W + CFG_BUZZER_ROW_GAP),
+                               CFG_BUZZER_BTN_Y,
+                               CFG_BUZZER_SLOT_W,
+                               CFG_BUZZER_BTN_H)) {
+            hal_waitForRelease();
+            currentLanguage = (currentLanguage == LANG_EN) ? LANG_TR : LANG_EN;
+            saveLanguageConfig();
+            drawSelectMix();
             hal_delay(300);
         }
         hal_delay(20);

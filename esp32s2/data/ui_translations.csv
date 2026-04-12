@@ -1,0 +1,33 @@
+﻿key,en,tr
+status_title,SYRUP MIXER,ŞURUP HAZIRLAYICI
+status_hint,LONG PRESS TO VIEW & POUR,KARIŞIMI SEÇİP UZUN BASIN
+reserved,Reserved,Boş
+build_label,BUILD:,VERSİYON
+wifi_on,WiFi ON,WiFi Acik
+wifi_off,WiFi OFF,WiFi Kapali
+buzzer_label,Buzzer,Ses
+state_on,ON,Açık
+state_off,OFF,Kapalı
+language_label,Lang,Dil
+language_detail_en,EN,EN
+language_detail_tr,TR,TR
+save,SAVE,KAYDET
+back,BACK,GERİ
+pour,POUR,AKTAR
+view_title_fmt,--- MIX %d CONTENTS ---,--- KARIŞIM %d ---
+syrup_label_fmt,Syrup %d: %d,Şurup %d: %d
+paused_mix_fmt,PAUSED MIX %d,BEKLEMEDE %d
+pouring_mix_fmt,POURING MIX %d,KARIŞIM %d HAZIRLANIYOR
+stop,STOP,DUR
+resume,RESUME,DEVAM
+pause,PAUSE,BEKLET
+overall_fmt,Overall %d%%,Toplam %d%%
+time_remaining_fmt,Elapsed: %.1fs Remaining: ~%.1fs,Geçen: %.1fs Kalan: ~%.1fs
+active_motors_fmt,Active motors (%d/%d total),Aktif motorlar (%d/%d)
+pour_complete,POUR COMPLETE,AKTARIM TAMAM
+pour_stopped,POUR STOPPED,AKTARIM DURDU
+summary_mix_fmt,Mix %d,Karışım %d
+summary_time_fmt,Time: %.1fs,Süre: %.1fs
+summary_motors_fmt,Motors: %d,Motor: %d
+summary_volume_fmt,Volume: %d ml,Hacim: %d ml
+ok,OK,TAMAM
