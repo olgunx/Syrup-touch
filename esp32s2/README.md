@@ -2,6 +2,8 @@
 
 ESP32-S2 firmware for a touchscreen syrup dispensing mixer with 8 pump outputs, editable mix recipes, WiFi-based configuration, OTA update support, and a native simulator target for UI testing.
 
+The current firmware also supports a bilingual on-device UI (English and Turkish), translation overrides from LittleFS, persisted language and buzzer settings, mix import/export from the web UI, and OTA updates for both firmware and the filesystem image.
+
 ## Hardware
 
 - Board: WEMOS LOLIN S2 Mini (ESP32-S2)
@@ -40,6 +42,9 @@ PlatformIO configuration is in [platformio.ini](/home/oun/CODE/Syrup-touch/esp32
 - Mix viewer with pour and back actions
 - Editable syrup assignments for 9 mixes and 8 motors
 - Sequenced pour execution with progress tracking
+- Bilingual on-device UI with English and Turkish labels
+- UI translation strings loaded from `data/ui_translations.csv`
+- Persistent language selection stored in LittleFS
 - WiFi AP and web UI for mix import/export and WiFi settings
 - OTA firmware and filesystem update page
 - Native simulator build for desktop testing
@@ -63,6 +68,14 @@ Relevant UI logic lives in [src/main.cpp](/home/oun/CODE/Syrup-touch/esp32s2/src
 - Buzzer state is persisted across reboots
 - Touch and pour completion tones respect the saved buzzer setting
 
+### Language and Translation Support
+
+- The config menu includes a language toggle for English and Turkish
+- The active language is persisted across reboots in `language_config.json`
+- Built-in fallback strings are compiled into the firmware
+- Runtime UI text can be overridden from `data/ui_translations.csv` without changing code
+- Turkish-capable font headers are included so the device UI can render localized labels correctly
+
 ### WiFi State Persistence
 
 - WiFi SSID and password are stored in LittleFS
@@ -85,6 +98,17 @@ This is intended as a quick manual pump test without leaving the config screen.
 - Motor 5 and motor 6 mappings were swapped in firmware to match the installed hardware wiring
 - All shared motor operations now use the corrected mapping, including pours and manual hold-to-run testing
 
+## Data Files in LittleFS
+
+These files are served from, or loaded from, the LittleFS image under `data/`:
+
+- `index.html`: captive portal and mix/WiFi configuration UI
+- `syrup_mixes.json`: persisted mix definitions and names
+- `ui_translations.csv`: runtime translation table for the touchscreen UI
+- `language_config.json`: last selected UI language
+
+If you change files under `data/`, rebuild and upload the filesystem image so the device picks up the new content.
+
 ## Running
 
 Build firmware:
@@ -93,13 +117,54 @@ Build firmware:
 platformio run
 ```
 
+Build LittleFS image:
+
+```bash
+platformio run -t buildfs
+```
+
+Upload firmware to the ESP32-S2:
+
+```bash
+platformio run -t upload
+```
+
+Upload LittleFS data files:
+
+```bash
+platformio run -t uploadfs
+```
+
 Build simulator:
 
 ```bash
 platformio run --environment simulator
 ```
 
+Run simulator:
+
+```bash
+platformio run --environment simulator -t exec
+```
+
+Simulator prerequisite on Debian/Ubuntu:
+
+```bash
+sudo apt install libsdl2-dev libsdl2-ttf-dev
+```
+
 Upload simulator task output is available through the existing VS Code tasks configuration in the workspace.
+
+## Web and OTA Endpoints
+
+When WiFi AP mode is enabled, the ESP32-S2 hosts:
+
+- `/`: web configuration UI
+- `/api/mixes`: GET/POST mix definitions
+- `/api/wifi`: GET/POST WiFi credentials
+- `/api/export`: export mixes as JSON
+- `/api/import`: import mixes as JSON
+- `/update`: OTA page for firmware and LittleFS uploads
 
 ## Project Structure
 
@@ -109,4 +174,6 @@ Upload simulator task output is available through the existing VS Code tasks con
 - [include/hal.h](/home/oun/CODE/Syrup-touch/esp32s2/include/hal.h): hardware abstraction interface
 - [include/config.h](/home/oun/CODE/Syrup-touch/esp32s2/include/config.h): pins, timing, and defaults
 - [data/index.html](/home/oun/CODE/Syrup-touch/esp32s2/data/index.html): web configuration UI
+- [data/ui_translations.csv](/home/oun/CODE/Syrup-touch/esp32s2/data/ui_translations.csv): English/Turkish UI text overrides
+- [data/language_config.json](/home/oun/CODE/Syrup-touch/esp32s2/data/language_config.json): persisted UI language selection
 - [data/syrup_mixes.json](/home/oun/CODE/Syrup-touch/esp32s2/data/syrup_mixes.json): persisted mix definitions
