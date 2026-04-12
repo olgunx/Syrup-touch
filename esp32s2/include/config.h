@@ -20,8 +20,8 @@ constexpr int FONT_SIZE_BOXNAME = 9;    // Turkish font pt size for names in gri
 //   Motor 2: GPIO  3, GPIO  4
 //   Motor 3: GPIO 39, GPIO  6
 //   Motor 4: GPIO  7, GPIO  8
-//   Motor 5: GPIO  9, GPIO 10
-//   Motor 6: GPIO 11, GPIO 12
+//   Motor 5: GPIO 11, GPIO 12
+//   Motor 6: GPIO  9, GPIO 10
 //   Motor 7: GPIO 13, GPIO 14
 //   Motor 8: GPIO 17, GPIO 21
 //
@@ -42,8 +42,8 @@ constexpr MotorPins MOTOR_PINS[8] = {
     { 3,  4},  // Motor 2 → syrup_2
     {39,  6},  // Motor 3 → syrup_3
     { 7,  8},  // Motor 4 → syrup_4
-    { 9, 10},  // Motor 5 → syrup_5
-    {11, 12},  // Motor 6 → syrup_6
+    {11, 12},  // Motor 5 → syrup_5
+    { 9, 10},  // Motor 6 → syrup_6
     {13, 14},  // Motor 7 → syrup_7
     {17, 21},  // Motor 8 → syrup_8
 };
