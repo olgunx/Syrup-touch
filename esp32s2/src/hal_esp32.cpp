@@ -240,6 +240,7 @@ bool hal_shouldQuit() { return false; }
 static WebServer *webServer = nullptr;
 static DNSServer *dnsServer = nullptr;
 static bool wifiActive = false;
+static bool wifiRestoreEnabled = false;
 static bool mixesUpdatedFlag = false;
 
 // Runtime WiFi config (loaded from LittleFS, falls back to config.h defaults)
@@ -252,9 +253,10 @@ static void loadWifiConfig() {
     if (n <= 0) {
         strncpy(wifiSSID, WIFI_AP_SSID, sizeof(wifiSSID) - 1);
         strncpy(wifiPass, WIFI_AP_PASS, sizeof(wifiPass) - 1);
+        wifiRestoreEnabled = false;
         return;
     }
-    // Minimal JSON parse for {"ssid":"...","pass":"..."}
+    // Minimal JSON parse for {"ssid":"...","pass":"...","enabled":0|1}
     auto extract = [&](const char *key, char *dst, size_t dstSz) {
         char needle[40];
         snprintf(needle, sizeof(needle), "\"%s\":\"", key);
@@ -272,13 +274,17 @@ static void loadWifiConfig() {
     wifiPass[0] = '\0';
     extract("ssid", wifiSSID, sizeof(wifiSSID));
     extract("pass", wifiPass, sizeof(wifiPass));
+    const char *enabledPos = strstr(buf, "\"enabled\":");
+    wifiRestoreEnabled = enabledPos && atoi(enabledPos + 10) != 0;
     if (wifiSSID[0] == '\0') strncpy(wifiSSID, WIFI_AP_SSID, sizeof(wifiSSID) - 1);
     if (wifiPass[0] == '\0') strncpy(wifiPass, WIFI_AP_PASS, sizeof(wifiPass) - 1);
 }
 
 static bool saveWifiConfig() {
-    char buf[160];
-    int len = snprintf(buf, sizeof(buf), "{\"ssid\":\"%s\",\"pass\":\"%s\"}", wifiSSID, wifiPass);
+    char buf[192];
+    int len = snprintf(buf, sizeof(buf),
+                       "{\"ssid\":\"%s\",\"pass\":\"%s\",\"enabled\":%d}",
+                       wifiSSID, wifiPass, wifiActive ? 1 : 0);
     return hal_writeFile("/wifi_config.json", buf, len);
 }
 
@@ -574,6 +580,9 @@ bool hal_wifiStart() {
     dnsServer->start(53, "*", WiFi.softAPIP());
 
     wifiActive = true;
+    if (!saveWifiConfig()) {
+        hal_log("WiFi state save failed");
+    }
     char msg[80];
     snprintf(msg, sizeof(msg), "WiFi AP started: %s @ %s",
              wifiSSID, WiFi.softAPIP().toString().c_str());
@@ -596,6 +605,9 @@ void hal_wifiStop() {
     WiFi.softAPdisconnect(true);
     WiFi.mode(WIFI_OFF);
     wifiActive = false;
+    if (!saveWifiConfig()) {
+        hal_log("WiFi state save failed");
+    }
     hal_log("WiFi AP stopped");
 }
 
@@ -644,6 +656,9 @@ void setup() {
 
     // Load WiFi config from LittleFS (or use defaults from config.h)
     loadWifiConfig();
+    if (wifiRestoreEnabled) {
+        hal_wifiStart();
+    }
 
     // LED
     pinMode(LED_PIN, OUTPUT);
