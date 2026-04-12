@@ -702,12 +702,27 @@ static const int WIFI_ICON_W = 16;
 static void drawWifiIcon() {
     HalColor bg = hal_color(20, 20, 30);
     hal_fillRect(WIFI_ICON_X - 2, 0, WIFI_ICON_W + 4, STATUS_H - 1, bg);
-    if (hal_wifiIsActive()) {
-        // Green filled circle = WiFi ON
-        hal_fillCircle(WIFI_ICON_X + WIFI_ICON_W / 2, STATUS_H / 2, 5, hal_color(0, 212, 170));
-    } else {
-        // Gray ring = WiFi OFF
-        hal_drawCircle(WIFI_ICON_X + WIFI_ICON_W / 2, STATUS_H / 2, 5, COL_GRAY);
+
+    const bool active = hal_wifiIsActive();
+    HalColor activeColor = hal_color(120, 255, 140);
+    HalColor inactiveColor = hal_color(95, 105, 120);
+    HalColor color = active ? activeColor : inactiveColor;
+    int baseX = WIFI_ICON_X + 1;
+    int baseY = STATUS_H - 4;
+    const int barWidth = 2;
+    const int barGap = 1;
+    const int barHeights[4] = {3, 5, 7, 9};
+
+    hal_fillCircle(baseX, baseY, 1, color);
+    for (int i = 0; i < 4; i++) {
+        int x = baseX + 3 + i * (barWidth + barGap);
+        int h = barHeights[i];
+        int y = baseY - h + 1;
+        if (active) {
+            hal_fillRect(x, y, barWidth, h, color);
+        } else {
+            hal_drawRect(x, y, barWidth, h, color);
+        }
     }
 }
 
