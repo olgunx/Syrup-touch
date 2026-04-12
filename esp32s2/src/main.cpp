@@ -1272,6 +1272,38 @@ struct RunningMotor {
     float startTime;   // "active seconds" when motor started
 };
 
+static float getActivePourTime(unsigned long startMs,
+                               unsigned long totalPauseMs,
+                               bool paused,
+                               unsigned long pauseStartMs) {
+    unsigned long nowMs = paused ? pauseStartMs : hal_millis();
+    return (nowMs - startMs - totalPauseMs) / 1000.0f;
+}
+
+static void refreshPouringScreen(int mixId,
+                                 RunningMotor *running,
+                                 int runningCount,
+                                 int totalMotors,
+                                 float finishedUnits,
+                                 int totalUnits,
+                                 float activeTime,
+                                 bool paused) {
+    MotorDisplay md[MAX_CONCURRENT];
+    float runFrac = 0;
+    for (int i = 0; i < runningCount; i++) {
+        float dur = running[i].amount * SECONDS_PER_UNIT;
+        float frac = dur > 0 ? (activeTime - running[i].startTime) / dur : 1.0f;
+        if (frac < 0) frac = 0;
+        if (frac > 1.0f) frac = 1.0f;
+        md[i] = {running[i].id, running[i].amount, (int)(frac * 100)};
+        runFrac += running[i].amount * frac;
+    }
+
+    updatePouringScreen(mixId, md, runningCount, totalMotors,
+                        finishedUnits + runFrac, (float)totalUnits,
+                        activeTime, paused);
+}
+
 static PourResult executePour(int mixId) {
     // --- Collect motors that need to run ---
     struct Pending { int id; int amount; };
@@ -1339,29 +1371,24 @@ static PourResult executePour(int mixId) {
                         log("RESUMED");
                     }
                     drawPouringLayout(mixId, totalMotors, paused);
+                    refreshPouringScreen(mixId, running, runningCount, totalMotors,
+                                         finishedUnits, totalUnits,
+                                         getActivePourTime(t0, totalPauseMs, paused, pauseStart),
+                                         paused);
+                    lastDisplayUpdate = hal_millis();
                     hal_delay(300);   // debounce
                 }
             }
         }
 
-        float activeTime = (hal_millis() - t0 - totalPauseMs) / 1000.0f;
+        float activeTime = getActivePourTime(t0, totalPauseMs, paused, pauseStart);
 
         // ---- Paused — only update display periodically ----
         if (paused) {
             if (hal_millis() - lastDisplayUpdate >= DISPLAY_UPDATE_MS) {
                 lastDisplayUpdate = hal_millis();
-                MotorDisplay md[MAX_CONCURRENT];
-                float runFrac = 0;
-                for (int i = 0; i < runningCount; i++) {
-                    float dur  = running[i].amount * SECONDS_PER_UNIT;
-                    float frac = (activeTime - running[i].startTime) / dur;
-                    if (frac > 1.0f) frac = 1.0f;
-                    md[i] = {running[i].id, running[i].amount, (int)(frac * 100)};
-                    runFrac += running[i].amount * frac;
-                }
-                updatePouringScreen(mixId, md, runningCount, totalMotors,
-                                  finishedUnits + runFrac, (float)totalUnits,
-                                  activeTime, true);
+                refreshPouringScreen(mixId, running, runningCount, totalMotors,
+                                     finishedUnits, totalUnits, activeTime, true);
             }
             hal_delay(50);
             continue;
@@ -1369,7 +1396,7 @@ static PourResult executePour(int mixId) {
 
         // ---- Start new motors up to MAX_CONCURRENT ----
         while (nextPending < pendingCount && runningCount < MAX_CONCURRENT) {
-            activeTime = (hal_millis() - t0 - totalPauseMs) / 1000.0f;
+            activeTime = getActivePourTime(t0, totalPauseMs, paused, pauseStart);
             int mId  = pending[nextPending].id;
             int mAmt = pending[nextPending].amount;
             running[runningCount++] = {mId, mAmt, activeTime};
@@ -1396,7 +1423,7 @@ static PourResult executePour(int mixId) {
         }
         if (cancelled) break;
 
-        activeTime = (hal_millis() - t0 - totalPauseMs) / 1000.0f;
+        activeTime = getActivePourTime(t0, totalPauseMs, paused, pauseStart);
 
         // ---- Check for completed motors ----
         for (int i = runningCount - 1; i >= 0; i--) {
@@ -1412,18 +1439,8 @@ static PourResult executePour(int mixId) {
         // ---- Update display periodically ----
         if (hal_millis() - lastDisplayUpdate >= DISPLAY_UPDATE_MS) {
             lastDisplayUpdate = hal_millis();
-            MotorDisplay md[MAX_CONCURRENT];
-            float runFrac = 0;
-            for (int i = 0; i < runningCount; i++) {
-                float dur  = running[i].amount * SECONDS_PER_UNIT;
-                float frac = (activeTime - running[i].startTime) / dur;
-                if (frac > 1.0f) frac = 1.0f;
-                md[i] = {running[i].id, running[i].amount, (int)(frac * 100)};
-                runFrac += running[i].amount * frac;
-            }
-            updatePouringScreen(mixId, md, runningCount, totalMotors,
-                              finishedUnits + runFrac, (float)totalUnits,
-                              activeTime, false);
+            refreshPouringScreen(mixId, running, runningCount, totalMotors,
+                                 finishedUnits, totalUnits, activeTime, false);
         }
 
         hal_delay(50);
@@ -1432,7 +1449,7 @@ static PourResult executePour(int mixId) {
     // Safety: ensure all motors off
     hal_allMotorsOff();
 
-    float elapsed = (hal_millis() - t0 - totalPauseMs) / 1000.0f;
+    float elapsed = getActivePourTime(t0, totalPauseMs, paused, pauseStart);
     PourStatus st = cancelled ? POUR_STOPPED : POUR_COMPLETE;
     if (cancelled)
         logf("Pour STOPPED after %.1fs", elapsed);
