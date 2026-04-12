@@ -536,7 +536,8 @@ static void drawConfigStatusBar() {
     }
     hal_setTextDatum(HAL_DATUM_ML);
     hal_setTextColor(hal_color(140, 130, 160), barBg);
-    hal_drawString(_buildStr, 6, CONFIG_TOP_ROW_H / 2, 1);
+    hal_drawString("BUILD:", 6, 10, 1);
+    hal_drawString(_buildStr, 6, 24, 1);
 
     // WiFi toggle button (original top row layout)
     bool on = hal_wifiIsActive();
