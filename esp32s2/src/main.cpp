@@ -74,10 +74,19 @@ const int GAP      = 3;      // gap between cells
 const int BOX_W    = SCREEN_W / 3;   // 106 — grid math unchanged for touch mapping
 const int BOX_H    = GRID_H / 3;     // ~73
 
-// Config screen (SELECT_MIX) has a thicker status bar with WiFi button
-static const int CONFIG_STATUS_H = 36;
+// Config screen (SELECT_MIX) keeps the original top row and adds a second buzzer row.
+static const int CONFIG_TOP_ROW_H = 36;
+static const int CONFIG_BUZZER_ROW_H = 28;
+static const int CONFIG_STATUS_H = CONFIG_TOP_ROW_H + CONFIG_BUZZER_ROW_H;
 static const int CFG_BOX_H = (SCREEN_H - CONFIG_STATUS_H) / 3;
 static const int CFG_WIFI_BTN_X = 110;
+static const int CFG_BUZZER_ROW_X = 6;
+static const int CFG_BUZZER_ROW_GAP = 4;
+static const int CFG_BUZZER_SLOT_W = (SCREEN_W - 12 - CFG_BUZZER_ROW_GAP * 3) / 4;
+static const int CFG_BUZZER_BTN_X = CFG_BUZZER_ROW_X;
+static const int CFG_BUZZER_BTN_Y = CONFIG_TOP_ROW_H + 4;
+static const int CFG_BUZZER_BTN_W = CFG_BUZZER_SLOT_W;
+static const int CFG_BUZZER_BTN_H = CONFIG_BUZZER_ROW_H - 8;
 
 HalColor gridColors[3][3];
 
@@ -191,11 +200,16 @@ static bool touchInRect(uint16_t tx, uint16_t ty,
 // ============================================
 // BUZZER HELPERS
 // ============================================
+static const char *BUZZER_CONFIG_FILE = "/buzzer_config.json";
+static bool buzzerEnabled = true;
+
 static void beepTouch() {
+    if (!buzzerEnabled) return;
     hal_buzzerTone(2500, 25);
 }
 
 static void beepPourDone() {
+    if (!buzzerEnabled) return;
     // Three ascending tones as a "done" notification
     hal_buzzerTone(1000, 150);
     hal_delay(60);
@@ -205,6 +219,7 @@ static void beepPourDone() {
 }
 
 static void beepPourStopped() {
+    if (!buzzerEnabled) return;
     // Two low warning tones
     hal_buzzerTone(800, 200);
     hal_delay(100);
@@ -234,6 +249,24 @@ static int jsonGetInt(const char *json, const char *key, int fallback) {
         p++;
     }
     return fallback;
+}
+
+static void loadBuzzerConfig() {
+    char buf[64];
+    int n = hal_readFile(BUZZER_CONFIG_FILE, buf, sizeof(buf));
+    if (n <= 0) {
+        buzzerEnabled = true;
+        return;
+    }
+    buzzerEnabled = jsonGetInt(buf, "enabled", 1) != 0;
+}
+
+static void saveBuzzerConfig() {
+    char buf[32];
+    int len = snprintf(buf, sizeof(buf), "{\"enabled\":%d}", buzzerEnabled ? 1 : 0);
+    if (!hal_writeFile(BUZZER_CONFIG_FILE, buf, len)) {
+        log("ERROR: failed to write buzzer config");
+    }
 }
 
 
@@ -448,10 +481,43 @@ static void drawGridCell(int row, int col, HalColor color, bool pressed = false)
         hal_drawString_Turkish(mixNames[num - 1][1], name_cx, name_cy + name_offset, FONT_SIZE_BOXNAME);
 }
 
-// --- Config screen status bar (thicker, with WiFi button) ---
+static void drawConfigToggleButton(int x, int y, int w, int h,
+                                   bool on, const char *label, const char *detail) {
+    HalColor btnBg = on ? hal_color(0, 100, 70) : hal_color(55, 55, 65);
+    fillRoundRect(x, y, w, h, 6, btnBg);
+
+    int dotX = x + 14;
+    int dotY = y + h / 2;
+    if (on) {
+        hal_fillCircle(dotX, dotY, 5, hal_color(0, 230, 160));
+    } else {
+        hal_drawCircle(dotX, dotY, 5, hal_color(140, 140, 150));
+    }
+
+    hal_setTextDatum(HAL_DATUM_ML);
+    hal_setTextColor(COL_WHITE, btnBg);
+    hal_drawString(label, dotX + 10, dotY - 6, 1);
+
+    HalColor detailColor = on ? hal_color(200, 200, 120) : hal_color(160, 160, 170);
+    hal_setTextColor(detailColor, btnBg);
+    hal_drawString(detail, dotX + 10, dotY + 7, 1);
+}
+
+static void drawConfigReservedButton(int x, int y, int w, int h) {
+    HalColor btnBg = hal_color(45, 45, 54);
+    fillRoundRect(x, y, w, h, 6, btnBg);
+    hal_setTextDatum(HAL_DATUM_MC);
+    hal_setTextColor(hal_color(150, 150, 160), btnBg);
+    hal_drawString("Reserved", x + w / 2, y + h / 2 - 5, 1);
+    hal_setTextColor(hal_color(110, 110, 120), btnBg);
+    hal_drawString("--", x + w / 2, y + h / 2 + 7, 1);
+}
+
+// --- Config screen status bar ---
 static void drawConfigStatusBar() {
     HalColor barBg = hal_color(30, 20, 40);
     hal_fillRect(0, 0, SCREEN_W, CONFIG_STATUS_H, barBg);
+    hal_drawHLine(0, CONFIG_TOP_ROW_H - 1, SCREEN_W, COL_GRAY);
     hal_drawHLine(0, CONFIG_STATUS_H - 1, SCREEN_W, COL_GRAY);
 
     // Build date/time label (DD-MM-YY HH:MM)
@@ -470,15 +536,14 @@ static void drawConfigStatusBar() {
     }
     hal_setTextDatum(HAL_DATUM_ML);
     hal_setTextColor(hal_color(140, 130, 160), barBg);
-    hal_drawString(_buildStr, 6, CONFIG_STATUS_H / 2, 1);
+    hal_drawString(_buildStr, 6, CONFIG_TOP_ROW_H / 2, 1);
 
-    // WiFi toggle button (rounded rect)
+    // WiFi toggle button (original top row layout)
     bool on = hal_wifiIsActive();
-    int btnX = CFG_WIFI_BTN_X, btnY = 4, btnW = SCREEN_W - CFG_WIFI_BTN_X - 4, btnH = CONFIG_STATUS_H - 8;
+    int btnX = CFG_WIFI_BTN_X, btnY = 4, btnW = SCREEN_W - CFG_WIFI_BTN_X - 4, btnH = CONFIG_TOP_ROW_H - 8;
     HalColor btnBg = on ? hal_color(0, 100, 70) : hal_color(55, 55, 65);
     fillRoundRect(btnX, btnY, btnW, btnH, 6, btnBg);
 
-    // Indicator dot
     int dotX = btnX + 14, dotY = btnY + btnH / 2;
     if (on) {
         hal_fillCircle(dotX, dotY, 5, hal_color(0, 230, 160));
@@ -486,12 +551,10 @@ static void drawConfigStatusBar() {
         hal_drawCircle(dotX, dotY, 5, hal_color(140, 140, 150));
     }
 
-    // Status text + SSID/password
     hal_setTextDatum(HAL_DATUM_ML);
     if (on) {
         hal_setTextColor(COL_WHITE, btnBg);
         hal_drawString("WiFi ON", dotX + 10, dotY - 6, 1);
-        // SSID and password side by side
         char info[64];
         snprintf(info, sizeof(info), "%s  pw:%s", hal_wifiGetSSID(), hal_wifiGetPass());
         hal_setTextColor(hal_color(200, 200, 120), btnBg);
@@ -500,9 +563,22 @@ static void drawConfigStatusBar() {
         hal_setTextColor(hal_color(160, 160, 170), btnBg);
         hal_drawString("WiFi OFF", dotX + 10, dotY, 1);
     }
+
+    for (int slot = 0; slot < 4; slot++) {
+        int slotX = CFG_BUZZER_ROW_X + slot * (CFG_BUZZER_SLOT_W + CFG_BUZZER_ROW_GAP);
+        if (slot == 0) {
+            drawConfigToggleButton(slotX, CFG_BUZZER_BTN_Y,
+                                   CFG_BUZZER_BTN_W, CFG_BUZZER_BTN_H,
+                                   buzzerEnabled, "Buzzer",
+                                   buzzerEnabled ? "ON" : "OFF");
+        } else {
+            drawConfigReservedButton(slotX, CFG_BUZZER_BTN_Y,
+                                     CFG_BUZZER_SLOT_W, CFG_BUZZER_BTN_H);
+        }
+    }
 }
 
-// --- Draw a single grid cell for select-mix mode (purple tinted) ---
+// --- Draw a single grid cell for select-mix mode (original 3x3 layout with reduced height) ---
 static void drawSelectCell(int row, int col, HalColor color) {
     int num = row * 3 + col + 1;
 
@@ -522,24 +598,34 @@ static void drawSelectCell(int row, int col, HalColor color) {
     hal_drawNumber(num, cx, cy, 4);
 }
 
+static void drawSelectMix() {
+    hal_fillScreen(hal_color(15, 15, 20));
+    drawConfigStatusBar();
+
+    for (int row = 0; row < 3; row++) {
+        for (int col = 0; col < 3; col++) {
+            drawSelectCell(row, col, COL_PURPLE);
+        }
+    }
+}
+
 // --- Full grid draw ---
 static void drawGrid(bool useGridColors, bool selectMode) {
     hal_fillScreen(hal_color(15, 15, 20));
-    if (selectMode) drawConfigStatusBar(); else drawStatusBar();
+    if (selectMode) {
+        drawConfigStatusBar();
+        return;
+    }
+    drawStatusBar();
     for (int row = 0; row < 3; row++) {
         for (int col = 0; col < 3; col++) {
-            if (selectMode) {
-                drawSelectCell(row, col, COL_PURPLE);
-            } else {
-                HalColor color = useGridColors ? gridColors[row][col] : COL_DEFAULT;
-                drawGridCell(row, col, color);
-            }
+            HalColor color = useGridColors ? gridColors[row][col] : COL_DEFAULT;
+            drawGridCell(row, col, color);
         }
     }
 }
 
 static void drawMainMenu()   { drawGrid(true,  false); }
-static void drawSelectMix()  { drawGrid(false, true);  }
 
 // --- Edit dashboard (syrup amounts + SAVE) ---
 static void drawEditDashboard() {
@@ -985,6 +1071,9 @@ void app_setup() {
     // Colours
     initColors();
 
+    // Persistent config
+    loadBuzzerConfig();
+
     // Mix data
     loadMixes();
 
@@ -1038,14 +1127,25 @@ void app_loop() {
         return;
     }
 
-    // --- Config screen (SELECT_MIX): thicker status bar with WiFi button ---
+    // --- Config screen (SELECT_MIX): original top row + dedicated buzzer row ---
     if (appState == SELECT_MIX && ty < CONFIG_STATUS_H) {
-        if (tx >= CFG_WIFI_BTN_X) {
-            beepTouch();
+        if (ty < CONFIG_TOP_ROW_H) {
+            if (tx >= CFG_WIFI_BTN_X) {
+                beepTouch();
+                hal_waitForRelease();
+                if (hal_wifiIsActive()) hal_wifiStop(); else hal_wifiStart();
+                drawConfigStatusBar();
+                hal_delay(300); // debounce — prevent ghost re-toggle
+            }
+        } else if (touchInRect(tx, ty, CFG_BUZZER_BTN_X, CFG_BUZZER_BTN_Y, CFG_BUZZER_BTN_W, CFG_BUZZER_BTN_H)) {
             hal_waitForRelease();
-            if (hal_wifiIsActive()) hal_wifiStop(); else hal_wifiStart();
+            bool wasEnabled = buzzerEnabled;
+            if (wasEnabled) beepTouch();
+            buzzerEnabled = !buzzerEnabled;
+            saveBuzzerConfig();
+            if (!wasEnabled && buzzerEnabled) beepTouch();
             drawConfigStatusBar();
-            hal_delay(300); // debounce — prevent ghost re-toggle
+            hal_delay(300);
         }
         hal_delay(20);
         return;
