@@ -599,6 +599,55 @@ static void drawSelectCell(int row, int col, HalColor color) {
     hal_drawNumber(num, cx, cy, 4);
 }
 
+static void getSelectCellRect(int row, int col, int &x, int &y, int &w, int &h) {
+    x = col * BOX_W + GAP;
+    y = CONFIG_STATUS_H + row * CFG_BOX_H + GAP;
+    w = BOX_W - GAP * 2;
+    h = CFG_BOX_H - GAP * 2;
+}
+
+static bool handleManualMotorHold(int row, int col, int number) {
+    if (number < 1 || number > 8) return false;
+
+    int cellX, cellY, cellW, cellH;
+    getSelectCellRect(row, col, cellX, cellY, cellW, cellH);
+
+    const unsigned long holdMs = 300;
+    unsigned long pressStart = hal_millis();
+    bool motorRunning = false;
+
+    drawSelectCell(row, col, hal_color(120, 40, 120));
+
+    while (!hal_shouldQuit()) {
+        uint16_t holdX = 0, holdY = 0;
+        bool touching = hal_getTouch(holdX, holdY);
+        bool stillInside = touching && touchInRect(holdX, holdY, cellX, cellY, cellW, cellH);
+
+        if (!stillInside) break;
+
+        if (!motorRunning && hal_millis() - pressStart >= holdMs) {
+            motorRunning = true;
+            hal_motorOn(number);
+            logf("Manual motor %d ON", number);
+            drawSelectCell(row, col, hal_color(150, 55, 150));
+        }
+
+        hal_delay(20);
+    }
+
+    if (motorRunning) {
+        hal_motorOff(number);
+        logf("Manual motor %d OFF", number);
+        uint16_t releaseX = 0, releaseY = 0;
+        if (hal_getTouch(releaseX, releaseY)) {
+            hal_waitForRelease();
+        }
+    }
+
+    drawSelectCell(row, col, COL_PURPLE);
+    return motorRunning;
+}
+
 static void drawSelectMix() {
     hal_fillScreen(hal_color(15, 15, 20));
     drawConfigStatusBar();
@@ -1274,6 +1323,10 @@ void app_loop() {
     // --------------------------------------------------
     case SELECT_MIX: {
         beepTouch();
+        if (handleManualMotorHold(row, col, number)) {
+            hal_delay(120);
+            break;
+        }
         hal_waitForRelease();
         currentEditMix = number;
         logf("Editing Mix %d", number);
