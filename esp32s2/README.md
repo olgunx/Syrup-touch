@@ -11,6 +11,17 @@ ESP32-S2 firmware for a touchscreen syrup dispensing mixer with 8 pump outputs, 
 - Buzzer: passive buzzer on GPIO 40
 - Filesystem: LittleFS
 
+Motor pin mapping:
+
+- Motor 1: GPIO 1, GPIO 2
+- Motor 2: GPIO 3, GPIO 4
+- Motor 3: GPIO 39, GPIO 6
+- Motor 4: GPIO 7, GPIO 8
+- Motor 5: GPIO 11, GPIO 12
+- Motor 6: GPIO 9, GPIO 10
+- Motor 7: GPIO 13, GPIO 14
+- Motor 8: GPIO 17, GPIO 21
+
 Pin mappings and timing constants are defined in [include/config.h](/home/oun/CODE/Syrup-touch/esp32s2/include/config.h).
 
 ## Build Targets
@@ -68,6 +79,11 @@ WiFi persistence is handled in [src/hal_esp32.cpp](/home/oun/CODE/Syrup-touch/es
 - Short tap behavior is preserved, so a normal tap still opens mix editing
 
 This is intended as a quick manual pump test without leaving the config screen.
+
+### Hardware Wiring Correction
+
+- Motor 5 and motor 6 mappings were swapped in firmware to match the installed hardware wiring
+- All shared motor operations now use the corrected mapping, including pours and manual hold-to-run testing
 
 ## Running
 
