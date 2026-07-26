@@ -519,25 +519,27 @@ static int buttonFontForLabel(const char *label, int preferredFont) {
 
 static void beepTouch() {
     if (!buzzerEnabled) return;
-    hal_buzzerTone(2500, 25);
+    hal_buzzerTone(2800, 45);
 }
 
 static void beepPourDone() {
     if (!buzzerEnabled) return;
-    // Three ascending tones as a "done" notification
-    hal_buzzerTone(1000, 150);
-    hal_delay(60);
-    hal_buzzerTone(1500, 150);
-    hal_delay(60);
-    hal_buzzerTone(2000, 300);
+    // Friendly, attention-grabbing pattern that is easier to hear in a noisy kitchen
+    hal_buzzerTone(1800, 220);
+    hal_delay(90);
+    hal_buzzerTone(2400, 260);
+    hal_delay(90);
+    hal_buzzerTone(2800, 360);
+    hal_delay(100);
+    hal_buzzerTone(3200, 520);
 }
 
 static void beepPourStopped() {
     if (!buzzerEnabled) return;
-    // Two low warning tones
-    hal_buzzerTone(800, 200);
-    hal_delay(100);
-    hal_buzzerTone(600, 300);
+    // Clear but softer warning pattern
+    hal_buzzerTone(1000, 220);
+    hal_delay(120);
+    hal_buzzerTone(800, 360);
 }
 
 // ============================================
@@ -1172,7 +1174,7 @@ static void drawViewMix(int mixId, const char *activeButton = nullptr) {
     hal_drawRect(10, 190, 140, 38, COL_WHITE);
     hal_setTextDatum(HAL_DATUM_MC);
     hal_setTextColor(COL_WHITE, backCol);
-    drawUiString(uiText(TXT_BACK), 80, 209, 4);
+    drawUiString(uiText(TXT_BACK), 80, 205, 4);
 
     // POUR button
     HalColor pourCol = (activeButton && strcmp(activeButton, "POUR") == 0)
@@ -1793,10 +1795,11 @@ void app_loop() {
 
             if (result.status != POUR_EMPTY) {
                 // Play signal based on pour outcome
-                if (result.status == POUR_COMPLETE)
+                if (result.status == POUR_COMPLETE) {
                     beepPourDone();
-                else
+                } else {
                     beepPourStopped();
+                }
 
                 drawSummaryScreen(currentViewMix, result.status,
                                   result.elapsed, result.motors,
