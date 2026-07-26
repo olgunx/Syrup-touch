@@ -321,8 +321,10 @@ def draw_edit_dashboard():
             else:
                 amount = syrup_data[str(current_edit_mix)][f"syrup_{box_num}"]
                 draw.rectangle((x1, y1, x1 + box_w, y1 + box_h), fill=(0, 100, 150), outline=(255,255,255))
-                text = f"S{box_num}\n{amount}"
-                draw_rotated_text(text, cx, cy, font_config, (255, 255, 255))
+                draw_rotated_text(f"S{box_num}", cx, cy - 14, font_config, (255, 255, 255))
+                draw_rotated_text("-", cx - 32, cy + 10, font_config, (255, 255, 255))
+                draw_rotated_text(str(amount), cx, cy + 10, font_config, (255, 255, 255))
+                draw_rotated_text("+", cx + 32, cy + 10, font_config, (255, 255, 255))
     display.image(image)
 
 def draw_view_mix(mix_id, active_button=None):
@@ -366,6 +368,7 @@ def draw_view_mix(mix_id, active_button=None):
     display.image(image)
 
 SECONDS_PER_UNIT = 10.0  # pour time per unit (seconds)
+MAX_SYRUP_UNITS = 99    # allow service entry above 10 units
 STAGGER_DELAY   = 0.5   # 500ms stagger between motor starts
 MAX_CONCURRENT  = 2     # max motors running at once
 
@@ -726,6 +729,11 @@ while True:
             else: col = 2
 
         hit_number = number_map[row][col]
+        local_x = raw_x - (col * box_w)
+        if local_x < 0:
+            local_x = 0
+        elif local_x > box_w:
+            local_x = box_w
 
         # ==========================================
         # STATE MACHINE
@@ -821,8 +829,12 @@ while True:
                 draw_main_menu()
             else:
                 val = syrup_data[str(current_edit_mix)][f"syrup_{hit_number}"]
-                val += 1
-                if val > 10: val = 0
+                if local_x < box_w // 2:
+                    if val > 0:
+                        val -= 1
+                else:
+                    if val < MAX_SYRUP_UNITS:
+                        val += 1
                 syrup_data[str(current_edit_mix)][f"syrup_{hit_number}"] = val
                 log(f"   ⚙️  [SIM] Motor {hit_number} set to {val} units (Mix {current_edit_mix})")
                 

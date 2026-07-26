@@ -76,6 +76,7 @@ const int GRID_H   = SCREEN_H - STATUS_H;
 const int GAP      = 3;      // gap between cells
 const int BOX_W    = SCREEN_W / 3;   // 106 — grid math unchanged for touch mapping
 const int BOX_H    = GRID_H / 3;     // ~73
+const int MAX_SYRUP_UNITS = 99; // allow values above 10 for service adjustments
 
 // Config screen (SELECT_MIX) keeps the original top row and adds a second buzzer row.
 static const int CONFIG_TOP_ROW_H = 36;
@@ -1042,9 +1043,11 @@ static void drawEditDashboard() {
                 hal_setTextColor(COL_WHITE, COL_TEAL);
                 char label[8];
                 snprintf(label, sizeof(label), "S%d", num);
-                hal_drawString(label, cx, cy - 14, 2);
+                hal_drawString(label, cx, cy - 18, 2);
+                hal_drawString("-", cx - 32, cy + 10, 2);
                 hal_drawNumber(syrupData[currentEditMix - 1][num - 1],
-                               cx, cy + 14, 4);
+                               cx, cy + 10, 4);
+                hal_drawString("+", cx + 32, cy + 10, 2);
             }
         }
     }
@@ -1064,9 +1067,13 @@ static void drawEditCell(int row, int col) {
     hal_setTextColor(COL_WHITE, COL_TEAL);
     char label[8];
     snprintf(label, sizeof(label), "S%d", num);
-    hal_drawString(label, cx, cy - 14, 2);
+    hal_drawString(label, cx, cy - 18, 2);
+    hal_drawString("-", cx - 32, cy + 10, 2);
     hal_drawNumber(syrupData[currentEditMix - 1][num - 1],
-                   cx, cy + 14, 4);
+                   cx, cy + 10, 4);
+    if (num != 9) {
+        hal_drawString("+", cx + 32, cy + 10, 2);
+    }
 }
 
 // --- View mix contents (with BACK / POUR buttons) ---
@@ -1598,6 +1605,7 @@ void app_loop() {
     int col    = tx / BOX_W;  if (col > 2) col = 2;
     int row    = (ty - gridY) / boxH;  if (row < 0) row = 0; if (row > 2) row = 2;
     int number = row * 3 + col + 1;
+    int localX = tx - col * BOX_W;
 
     switch (appState) {
 
@@ -1728,9 +1736,12 @@ void app_loop() {
             resetGridColors();
             drawMainMenu();
         } else {
-            // Increment syrup value (0→1→…→10→0)
             int &val = syrupData[currentEditMix - 1][number - 1];
-            val = (val + 1) % 11;
+            if (localX < BOX_W / 2) {
+                if (val > 0) val -= 1;
+            } else {
+                if (val < MAX_SYRUP_UNITS) val += 1;
+            }
             logf("Motor %d set to %d (Mix %d)", number, val, currentEditMix);
 
             // Flash feedback then redraw just this cell
