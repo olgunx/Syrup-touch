@@ -13,6 +13,7 @@ language_detail_en,EN,EN
 language_detail_tr,TR,TR
 save,SAVE,KAYDET
 back,BACK,GERİ
+exit_home,EXIT,ÇIKIŞ
 pour,POUR,AKTAR
 view_title_fmt,--- MIX %d CONTENTS ---,--- KARIŞIM %d ---
 syrup_label_fmt,Syrup %d: %d,Şurup %d: %d

@@ -224,6 +224,7 @@ enum UiTextId {
     TXT_LANG_DETAIL_TR,
     TXT_SAVE,
     TXT_BACK,
+    TXT_EXIT_HOME,
     TXT_POUR,
     TXT_VIEW_TITLE_FMT,
     TXT_SYRUP_LABEL_FMT,
@@ -268,6 +269,7 @@ static const UiTextKeyMap UI_TEXT_KEYS[] = {
     {"language_detail_tr", TXT_LANG_DETAIL_TR},
     {"save", TXT_SAVE},
     {"back", TXT_BACK},
+    {"exit_home", TXT_EXIT_HOME},
     {"pour", TXT_POUR},
     {"view_title_fmt", TXT_VIEW_TITLE_FMT},
     {"syrup_label_fmt", TXT_SYRUP_LABEL_FMT},
@@ -313,6 +315,7 @@ static void initDefaultUiTexts() {
         "TR",
         "SAVE",
         "BACK",
+        "EXIT",
         "POUR",
         "--- MIX %d CONTENTS ---",
         "Syrup %d: %d",
@@ -347,6 +350,7 @@ static void initDefaultUiTexts() {
         "TR",
         "KAYDET",
         "GERI",
+        "ÇIKIŞ",
         "DOK",
         "--- KARISIM %d ---",
         "Surup %d: %d",
@@ -848,6 +852,14 @@ static void drawConfigReservedButton(int x, int y, int w, int h) {
     hal_drawString("--", x + w / 2, y + h / 2 + 7, 1);
 }
 
+static void drawConfigHomeButton(int x, int y, int w, int h) {
+    HalColor btnBg = hal_color(65, 55, 90);
+    fillRoundRect(x, y, w, h, 6, btnBg);
+    hal_setTextDatum(HAL_DATUM_MC);
+    hal_setTextColor(hal_color(240, 220, 255), btnBg);
+    drawUiString(uiText(TXT_EXIT_HOME), x + w / 2, y + h / 2 - 2, 1);
+}
+
 // --- Config screen status bar ---
 static void drawConfigStatusBar() {
     HalColor barBg = hal_color(30, 20, 40);
@@ -913,6 +925,9 @@ static void drawConfigStatusBar() {
                                    currentLanguage == LANG_TR,
                                    uiText(TXT_LANGUAGE),
                                    currentLanguage == LANG_TR ? uiText(TXT_LANG_DETAIL_TR) : uiText(TXT_LANG_DETAIL_EN));
+        } else if (slot == 3) {
+            drawConfigHomeButton(slotX, CFG_BUZZER_BTN_Y,
+                                 CFG_BUZZER_SLOT_W, CFG_BUZZER_BTN_H);
         } else {
             drawConfigReservedButton(slotX, CFG_BUZZER_BTN_Y,
                                      CFG_BUZZER_SLOT_W, CFG_BUZZER_BTN_H);
@@ -1576,6 +1591,17 @@ void app_loop() {
             currentLanguage = (currentLanguage == LANG_EN) ? LANG_TR : LANG_EN;
             saveLanguageConfig();
             drawSelectMix();
+            hal_delay(300);
+        } else if (touchInRect(tx, ty,
+                               CFG_BUZZER_ROW_X + 3 * (CFG_BUZZER_SLOT_W + CFG_BUZZER_ROW_GAP),
+                               CFG_BUZZER_BTN_Y,
+                               CFG_BUZZER_SLOT_W,
+                               CFG_BUZZER_BTN_H)) {
+            hal_waitForRelease();
+            beepTouch();
+            appState = MAIN_MENU;
+            resetGridColors();
+            drawMainMenu();
             hal_delay(300);
         }
         hal_delay(20);
