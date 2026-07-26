@@ -205,7 +205,7 @@ static bool touchInRect(uint16_t tx, uint16_t ty,
 
 static float effectiveSecondsPerUnit(int motorId) {
     if (motorId >= 1 && motorId <= 8) {
-        return SECONDS_PER_UNIT + calibrationSecondsPerMotor[motorId - 1];
+        return SECONDS_PER_UNIT + calibrationSecondsPerMotor[motorId - 1]/2;
     }
     return SECONDS_PER_UNIT;
 }
@@ -1171,7 +1171,7 @@ static void drawCalibrationScreen() {
     char valueBuf[24];
     snprintf(valueBuf, sizeof(valueBuf), "%+.1f s", calibrationSecondsPerMotor[calibrationMotorId - 1]);
     hal_setTextColor(COL_WHITE, COL_DARK_BLUE);
-    drawUiString(valueBuf, 160, 78, 3);
+    drawUiString(valueBuf, 160, 78, 1);
 
     const int btnW = 96;
     const int btnH = 54;

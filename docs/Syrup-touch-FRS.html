@@ -1,0 +1,303 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Syrup-touch Functional Requirements Specification</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 18mm 16mm 18mm 16mm;
+    }
+
+    body {
+      font-family: "Liberation Sans", Arial, sans-serif;
+      font-size: 11pt;
+      line-height: 1.35;
+      color: #1c1c1c;
+    }
+
+    h1, h2, h3 {
+      color: #10344a;
+      margin-bottom: 0.25em;
+    }
+
+    h1 {
+      font-size: 22pt;
+      border-bottom: 2px solid #10344a;
+      padding-bottom: 6px;
+      margin-top: 0;
+    }
+
+    h2 {
+      font-size: 15pt;
+      border-bottom: 1px solid #9db2bf;
+      padding-bottom: 3px;
+      margin-top: 1.3em;
+    }
+
+    h3 {
+      font-size: 12pt;
+      margin-top: 1.1em;
+    }
+
+    p {
+      margin: 0.4em 0 0.8em;
+    }
+
+    ul {
+      margin: 0.2em 0 0.8em 1.2em;
+    }
+
+    li {
+      margin: 0.15em 0;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 0.6em 0 1em;
+      page-break-inside: avoid;
+    }
+
+    th, td {
+      border: 1px solid #8ba1ad;
+      padding: 6px 8px;
+      vertical-align: top;
+    }
+
+    th {
+      background: #dbe7ee;
+      text-align: left;
+    }
+
+    .meta {
+      margin: 0.9em 0 1.2em;
+      padding: 10px 12px;
+      background: #eef4f7;
+      border-left: 4px solid #10344a;
+    }
+
+    .note {
+      margin: 0.8em 0;
+      padding: 8px 10px;
+      background: #f8f2df;
+      border-left: 4px solid #c78b12;
+    }
+
+    .mono {
+      font-family: "Liberation Mono", monospace;
+      font-size: 10pt;
+    }
+  </style>
+</head>
+<body>
+  <h1>Syrup-touch Functional Requirements Specification</h1>
+
+  <div class="meta">
+    <strong>Document purpose:</strong> describe the functionality implemented in the current Syrup-touch software so testers can validate the delivered behavior.<br>
+    <strong>System under test:</strong> touchscreen syrup dispensing application shared by the ESP32-S2 target and the SDL2 Linux simulator.<br>
+    <strong>Source basis:</strong> README, <span class="mono">esp32s2/src/main.cpp</span>, <span class="mono">esp32s2/include/config.h</span>, and repository recipe data as of 2026-04-13.
+  </div>
+
+  <h2>1. System Overview</h2>
+  <p>The software controls a syrup dispensing machine with a 320x240 touchscreen user interface, 9 recipe slots, and 8 independent syrup pump channels. The same application logic runs on both the physical ESP32-S2 hardware and a Linux simulator through a hardware abstraction layer.</p>
+  <p>The tester-visible workflow is built around four application states:</p>
+  <ul>
+    <li>Main menu</li>
+    <li>View recipe</li>
+    <li>Select recipe for editing</li>
+    <li>Edit dashboard</li>
+  </ul>
+
+  <h2>2. Operating Context</h2>
+  <table>
+    <tr>
+      <th>Area</th>
+      <th>Implemented behavior</th>
+    </tr>
+    <tr>
+      <td>User interface</td>
+      <td>Landscape touchscreen UI with a 3x3 numbered grid. Recipes are selected by slot number 1-9.</td>
+    </tr>
+    <tr>
+      <td>Dispensing channels</td>
+      <td>8 pump outputs mapped to syrup_1 through syrup_8.</td>
+    </tr>
+    <tr>
+      <td>Persistence</td>
+      <td>Recipe amounts are loaded from and saved to <span class="mono">/syrup_mixes.json</span>.</td>
+    </tr>
+    <tr>
+      <td>Execution targets</td>
+      <td>ESP32-S2 device build and Linux simulator build share the same business logic.</td>
+    </tr>
+  </table>
+
+  <h2>3. Functional Requirements</h2>
+
+  <h3>FR-1. Application startup</h3>
+  <ul>
+    <li>On startup, the software shall initialize colors, load recipe data, draw the main menu, and log that the system is ready.</li>
+    <li>If the recipe data file cannot be read, the software shall continue by using zeroed recipe amounts for all 9 recipes and all 8 syrup channels.</li>
+  </ul>
+
+  <h3>FR-2. Main menu presentation</h3>
+  <ul>
+    <li>The software shall display a 3x3 grid of recipe buttons numbered 1 through 9.</li>
+    <li>The software shall display a status bar at the top with the product label and the instruction text indicating that long press is used to view and pour.</li>
+    <li>Touches inside the status bar area shall be ignored.</li>
+    <li>Each grid tile shall provide visual pressed and released feedback when touched.</li>
+  </ul>
+
+  <h3>FR-3. Recipe viewing by long press</h3>
+  <ul>
+    <li>A press of 300 ms or longer on a recipe tile shall open the view screen for that recipe slot.</li>
+    <li>The software shall show all 8 syrup values for the selected recipe in two columns.</li>
+    <li>The view screen shall provide a BACK button and a POUR button.</li>
+    <li>The current UI identifies recipes by slot number only. Stored recipe names are not displayed in the active UI.</li>
+  </ul>
+
+  <h3>FR-4. Entry to edit mode by passcode</h3>
+  <ul>
+    <li>A short tap on a main menu tile shall be treated as input to a 4-step secret passcode buffer.</li>
+    <li>The implemented passcode sequence shall be 4, 7, 2, 5.</li>
+    <li>When 4 consecutive short taps match the passcode, the software shall enter recipe selection mode for editing.</li>
+    <li>If more than 4 short taps occur, the buffer shall behave as a rolling 4-entry window.</li>
+    <li>Entering recipe view by long press shall clear the in-progress passcode buffer.</li>
+  </ul>
+
+  <h3>FR-5. Recipe selection for editing</h3>
+  <ul>
+    <li>After passcode acceptance, the software shall show a 3x3 selection grid for choosing which recipe slot to edit.</li>
+    <li>A tap on any recipe slot shall open the edit dashboard for that recipe.</li>
+  </ul>
+
+  <h3>FR-6. Recipe editing behavior</h3>
+  <ul>
+    <li>The edit dashboard shall show syrup channels S1 through S8 and a SAVE button in the ninth tile.</li>
+    <li>Tapping a syrup tile shall increment that syrup amount for the selected recipe.</li>
+    <li>The implemented increment cycle shall be 0 to 10 and then wrap back to 0.</li>
+    <li>The software shall provide a brief visual flash on the edited syrup tile before redrawing its value.</li>
+    <li>The current implementation does not provide a cancel or back action from the edit dashboard. Exit is through SAVE only.</li>
+  </ul>
+
+  <h3>FR-7. Saving edited recipes</h3>
+  <ul>
+    <li>Tapping SAVE shall write the current recipe dataset to persistent storage.</li>
+    <li>After SAVE, the software shall return to the main menu.</li>
+    <li>The software shall log the saved recipe number and the on or off state of each motor channel.</li>
+  </ul>
+
+  <h3>FR-8. Pour initiation</h3>
+  <ul>
+    <li>From the recipe view screen, tapping POUR shall start the dispensing process for the selected recipe.</li>
+    <li>Only syrup channels with values greater than zero shall be scheduled for dispensing.</li>
+    <li>If all 8 syrup values are zero, the software shall not display the summary screen and shall return to the main menu after the pour attempt.</li>
+  </ul>
+
+  <h3>FR-9. Pour execution rules</h3>
+  <ul>
+    <li>Each syrup unit shall correspond to 10.0 seconds of motor runtime.</li>
+    <li>No more than 2 motors shall run at the same time.</li>
+    <li>When two motors are started in sequence, the second start shall be delayed by 500 ms to reduce inrush current.</li>
+    <li>Each motor shall remain active until its configured amount has completed based on the time-per-unit setting.</li>
+    <li>When a motor completes, the software shall turn that motor off and continue with any remaining queued motors.</li>
+    <li>At the end of a pour, the software shall turn off all motors as a safety action.</li>
+  </ul>
+
+  <h3>FR-10. Pour progress screen</h3>
+  <ul>
+    <li>During dispensing, the software shall show a progress screen for the active recipe.</li>
+    <li>The progress screen shall display overall percentage complete.</li>
+    <li>The progress screen shall display completed and total volume in ml.</li>
+    <li>The progress screen shall display elapsed time and estimated remaining time.</li>
+    <li>The progress screen shall display up to 2 active motor progress indicators, matching the maximum concurrency limit.</li>
+    <li>The progress screen shall provide STOP and PAUSE or RESUME actions.</li>
+  </ul>
+
+  <h3>FR-11. Pause and resume</h3>
+  <ul>
+    <li>Tapping PAUSE shall stop all currently running motors without clearing the active pour.</li>
+    <li>While paused, the screen title shall change to indicate paused state and the action button shall change from PAUSE to RESUME.</li>
+    <li>Tapping RESUME shall restart the motors that were active before the pause.</li>
+    <li>Paused time shall be excluded from the reported elapsed pour time.</li>
+  </ul>
+
+  <h3>FR-12. Stop during pour</h3>
+  <ul>
+    <li>Tapping STOP during dispensing shall cancel the current pour.</li>
+    <li>The software shall allow STOP both during normal progress polling and during the 500 ms inrush stagger window.</li>
+    <li>A stopped pour shall be treated as a completed interaction with stopped status rather than as an application fault.</li>
+  </ul>
+
+  <h3>FR-13. End-of-pour summary</h3>
+  <ul>
+    <li>After a non-empty pour, the software shall show a summary screen.</li>
+    <li>The summary shall indicate either POUR COMPLETE or POUR STOPPED.</li>
+    <li>The summary shall display recipe number, elapsed time, number of motors used, and total configured volume in ml.</li>
+    <li>The summary shall wait for an OK tap before returning to the main menu.</li>
+  </ul>
+
+  <h3>FR-14. Audible and log feedback</h3>
+  <ul>
+    <li>The software shall issue a short touch tone for regular UI taps.</li>
+    <li>The software shall play a three-tone completion signal after a completed pour.</li>
+    <li>The software shall play a two-tone warning signal after a stopped pour.</li>
+    <li>The software shall log major events including startup, heartbeat, recipe viewing, editing, motor start, motor completion, pause, resume, stop, and save operations.</li>
+  </ul>
+
+  <h3>FR-15. Periodic heartbeat</h3>
+  <ul>
+    <li>While the application is running, the software shall emit a heartbeat approximately every 5 seconds.</li>
+    <li>The heartbeat shall pulse the LED and log the current state and uptime.</li>
+  </ul>
+
+  <h2>4. Data Requirements</h2>
+  <table>
+    <tr>
+      <th>Item</th>
+      <th>Requirement</th>
+    </tr>
+    <tr>
+      <td>Recipe count</td>
+      <td>9 recipe slots indexed 1 to 9.</td>
+    </tr>
+    <tr>
+      <td>Syrup count per recipe</td>
+      <td>8 syrup values per recipe, mapped to motors 1 to 8.</td>
+    </tr>
+    <tr>
+      <td>Editable range</td>
+      <td>Each syrup value is editable in the range 0 to 10 inclusive.</td>
+    </tr>
+    <tr>
+      <td>Persistence format</td>
+      <td>Recipe data is stored in a JSON-like text file written by the application.</td>
+    </tr>
+  </table>
+
+  <h2>5. Tester Focus Areas</h2>
+  <ul>
+    <li>Verify the distinction between short tap and long press, using the implemented 300 ms threshold rather than the README wording.</li>
+    <li>Verify that recipe names are not shown in the current UI even if name fields exist in stored data.</li>
+    <li>Verify that edit mode cannot be exited without saving.</li>
+    <li>Verify that empty recipes do not show a summary screen after POUR is pressed.</li>
+    <li>Verify that pause excludes paused duration from the elapsed-time figure.</li>
+    <li>Verify that STOP works both during active pouring and during the start stagger period.</li>
+    <li>Verify that no more than 2 motors are active at once.</li>
+    <li>Verify that all motors are off after completion, stop, and application exit from the pour loop.</li>
+  </ul>
+
+  <h2>6. Out of Scope for This Version</h2>
+  <ul>
+    <li>No on-screen authentication beyond the hidden passcode sequence.</li>
+    <li>No visible recipe-name management in the UI.</li>
+    <li>No cancel-without-save path from edit dashboard.</li>
+    <li>No per-motor calibration or per-syrup timing differences; all channels use the same seconds-per-unit setting.</li>
+  </ul>
+
+  <div class="note">
+    This document describes current implemented behavior for testing. Where repository documentation and code differ, the implementation in the shared application logic was treated as the source of truth.
+  </div>
+</body>
+</html>
