@@ -226,6 +226,8 @@ enum UiTextId {
     TXT_BACK,
     TXT_EXIT_HOME,
     TXT_POUR,
+    TXT_TOTAL_EST_FMT,
+    TXT_MOTOR_EST_FMT,
     TXT_VIEW_TITLE_FMT,
     TXT_SYRUP_LABEL_FMT,
     TXT_PAUSED_MIX_FMT,
@@ -271,6 +273,8 @@ static const UiTextKeyMap UI_TEXT_KEYS[] = {
     {"back", TXT_BACK},
     {"exit_home", TXT_EXIT_HOME},
     {"pour", TXT_POUR},
+    {"total_est_fmt", TXT_TOTAL_EST_FMT},
+    {"motor_est_fmt", TXT_MOTOR_EST_FMT},
     {"view_title_fmt", TXT_VIEW_TITLE_FMT},
     {"syrup_label_fmt", TXT_SYRUP_LABEL_FMT},
     {"paused_mix_fmt", TXT_PAUSED_MIX_FMT},
@@ -313,10 +317,12 @@ static void initDefaultUiTexts() {
         "Lang",
         "EN",
         "TR",
-        "SAVE",
+        "SAVE/EXIT",
         "BACK",
         "EXIT",
         "POUR",
+        "Total est: %d ml / %.1fs",
+        "M%d: %d ml",
         "--- MIX %d CONTENTS ---",
         "Syrup %d: %d",
         "PAUSED MIX %d",
@@ -348,10 +354,12 @@ static void initDefaultUiTexts() {
         "Dil",
         "EN",
         "TR",
-        "KAYDET",
+        "KAYDET/ÇIK",
         "GERI",
         "ÇIKIŞ",
         "DOK",
+        "Toplam tahm.: %d ml / %.1fs",
+        "M%d: %d ml",
         "--- KARISIM %d ---",
         "Surup %d: %d",
         "BEKLEMEDE %d",
@@ -1102,34 +1110,62 @@ static void drawViewMix(int mixId, const char *activeButton = nullptr) {
     uiTextFormat(title, sizeof(title), TXT_VIEW_TITLE_FMT, mixId);
     drawUiString(title, 160, 10, 2);
 
-    // Syrup values — two columns
-    hal_setTextDatum(HAL_DATUM_MC);
-    hal_setTextColor(COL_WHITE, COL_DARK_TEAL);
-    for (int i = 0; i < 4; i++) {
-        int y = 55 + i * 28;
-        char left[32], right[32];
-        uiTextFormat(left, sizeof(left), TXT_SYRUP_LABEL_FMT, i + 1, syrupData[mixId - 1][i]);
-        uiTextFormat(right, sizeof(right), TXT_SYRUP_LABEL_FMT, i + 5, syrupData[mixId - 1][i + 4]);
-        drawUiString(left,  80,  y, 2);
-        drawUiString(right, 240, y, 2);
+    int totalVolume = 0;
+    float totalEstTime = 0.0f;
+    int activeMotors[8];
+    int activeCount = 0;
+    for (int i = 0; i < 8; i++) {
+        int amt = syrupData[mixId - 1][i];
+        if (amt > 0) {
+            totalVolume += amt;
+            totalEstTime += amt * SECONDS_PER_UNIT;
+        }
+        activeMotors[activeCount++] = i + 1;
     }
 
-    // BACK button (moved up by 10px)
+    if (activeCount > 0) {
+        char summary[40];
+        uiTextFormat(summary, sizeof(summary), TXT_TOTAL_EST_FMT, totalVolume, totalEstTime);
+        hal_setTextDatum(HAL_DATUM_TC);
+        hal_setTextColor(hal_color(180, 240, 255), COL_DARK_TEAL);
+        drawUiString(summary, 160, 42, 2);
+    }
+
+    const int listY = 74;
+    const int lineH = 22;
+    const int colW = 140;
+    for (int idx = 0; idx < activeCount; idx++) {
+        int motor = activeMotors[idx];
+        int amt = syrupData[mixId - 1][motor - 1];
+        char line[32];
+        uiTextFormat(line, sizeof(line), TXT_MOTOR_EST_FMT, motor, amt);
+
+        int col = idx % 2;
+        int row = idx / 2;
+        int x = 14 + col * colW;
+        int y = listY + row * lineH;
+
+        hal_setTextDatum(HAL_DATUM_ML);
+        hal_setTextColor(COL_WHITE, COL_DARK_TEAL);
+        drawUiString(line, x, y, 2);
+    }
+
+    // BACK button
     HalColor backCol = (activeButton && strcmp(activeButton, "BACK") == 0)
                        ? COL_LIGHT_RED : COL_DARK_RED;
-    hal_fillRect(10, 170, 140, 45, backCol);
-    hal_drawRect(10, 170, 140, 45, COL_WHITE);
+    hal_fillRect(10, 190, 140, 38, backCol);
+    hal_drawRect(10, 190, 140, 38, COL_WHITE);
     hal_setTextDatum(HAL_DATUM_MC);
     hal_setTextColor(COL_WHITE, backCol);
-    drawUiString(uiText(TXT_BACK), 80, 192, 4);
+    drawUiString(uiText(TXT_BACK), 80, 209, 4);
 
-    // POUR button (moved up by 10px)
+    // POUR button
     HalColor pourCol = (activeButton && strcmp(activeButton, "POUR") == 0)
                        ? COL_LIGHT_GREEN : COL_DARK_GREEN;
-    hal_fillRect(170, 170, 140, 45, pourCol);
-    hal_drawRect(170, 170, 140, 45, COL_WHITE);
+    hal_fillRect(170, 190, 140, 38, pourCol);
+    hal_drawRect(170, 190, 140, 38, COL_WHITE);
     hal_setTextColor(COL_WHITE, pourCol);
-    drawUiString(uiText(TXT_POUR), 240, 192, 4);
+    drawUiString(uiText(TXT_POUR), 240, 209, 4);
 }
 
 // --- Pouring progress screen: static layout (call once) ---

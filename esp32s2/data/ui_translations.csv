@@ -11,10 +11,12 @@ state_off,OFF,Kapalı
 language_label,Lang,Dil
 language_detail_en,EN,EN
 language_detail_tr,TR,TR
-save,SAVE,KAYDET
+save,SAVE/EXIT,KAYDET/ÇIK
 back,BACK,GERİ
 exit_home,EXIT,ÇIKIŞ
 pour,POUR,AKTAR
+total_est_fmt,Total est: %d ml / %.1fs,Toplam tahm.: %d ml / %.1fs
+motor_est_fmt,M%d: %d ml,M%d: %d ml
 view_title_fmt,--- MIX %d CONTENTS ---,--- KARIŞIM %d ---
 syrup_label_fmt,Syrup %d: %d,Şurup %d: %d
 paused_mix_fmt,PAUSED MIX %d,BEKLEMEDE %d
