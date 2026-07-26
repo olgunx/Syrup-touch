@@ -37,7 +37,7 @@ static void fillRoundRect(int x, int y, int w, int h, int r, HalColor c) {
 // ============================================
 // APPLICATION STATE
 // ============================================
-enum AppState { MAIN_MENU, VIEW_MIX, SELECT_MIX, EDIT_DASHBOARD };
+enum AppState { MAIN_MENU, VIEW_MIX, SELECT_MIX, EDIT_DASHBOARD, CALIBRATE_DURATION };
 AppState appState = MAIN_MENU;
 
 enum UiLanguage { LANG_EN = 0, LANG_TR = 1 };
@@ -51,6 +51,8 @@ int syrupData[9][8];
 char mixNames[9][2][17]; // 2 lines, 16 chars + null each
 int currentEditMix = 1;
 int currentViewMix = 1;
+float calibrationSecondsPerMotor[8] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+int calibrationMotorId = 1;
 
 // ============================================
 // PASSCODE
@@ -199,6 +201,13 @@ static bool touchInRect(uint16_t tx, uint16_t ty,
                         int rx, int ry, int rw, int rh) {
     return (int)tx >= rx && (int)tx <= rx + rw &&
            (int)ty >= ry && (int)ty <= ry + rh;
+}
+
+static float effectiveSecondsPerUnit(int motorId) {
+    if (motorId >= 1 && motorId <= 8) {
+        return SECONDS_PER_UNIT + calibrationSecondsPerMotor[motorId - 1];
+    }
+    return SECONDS_PER_UNIT;
 }
 
 // ============================================
@@ -546,6 +555,7 @@ static void beepPourStopped() {
 // PERSISTENT STORAGE (HAL + manual JSON)
 // ============================================
 static const char *DATA_FILE = "/syrup_mixes.json";
+static const char *CALIBRATION_CONFIG_FILE = "/calibration_config.json";
 
 // Minimal JSON integer extractor: finds "key": <int> in a flat JSON object.
 // NOT a general JSON parser — sufficient for our simple data format.
@@ -560,6 +570,22 @@ static int jsonGetInt(const char *json, const char *key, int fallback) {
             while (*p && (*p == '"' || *p == ':' || *p == ' ' || *p == '\t')) p++;
             if (*p == '-' || (*p >= '0' && *p <= '9')) {
                 return (int)strtol(p, nullptr, 10);
+            }
+        }
+        p++;
+    }
+    return fallback;
+}
+
+static float jsonGetFloat(const char *json, const char *key, float fallback) {
+    const char *p = json;
+    size_t klen = strlen(key);
+    while ((p = strstr(p, key)) != nullptr) {
+        if (p > json && *(p - 1) == '"') {
+            p += klen;
+            while (*p && (*p == '"' || *p == ':' || *p == ' ' || *p == '\t')) p++;
+            if (*p == '-' || (*p >= '0' && *p <= '9')) {
+                return strtof(p, nullptr);
             }
         }
         p++;
@@ -603,6 +629,35 @@ static void saveLanguageConfig() {
     }
 }
 
+static void loadCalibrationConfig() {
+    char buf[128];
+    int n = hal_readFile(CALIBRATION_CONFIG_FILE, buf, sizeof(buf));
+    if (n <= 0) {
+        for (int i = 0; i < 8; i++) calibrationSecondsPerMotor[i] = 0.0f;
+        return;
+    }
+    for (int i = 0; i < 8; i++) {
+        char key[16];
+        snprintf(key, sizeof(key), "motor_%d", i + 1);
+        calibrationSecondsPerMotor[i] = jsonGetFloat(buf, key, 0.0f);
+    }
+}
+
+static void saveCalibrationConfig() {
+    char buf[256];
+    int pos = 0;
+    pos += snprintf(buf + pos, sizeof(buf) - pos, "{");
+    for (int i = 0; i < 8; i++) {
+        pos += snprintf(buf + pos, sizeof(buf) - pos,
+                        "%s\"motor_%d\":%.2f",
+                        (i > 0) ? "," : "",
+                        i + 1, calibrationSecondsPerMotor[i]);
+    }
+    pos += snprintf(buf + pos, sizeof(buf) - pos, "}");
+    if (!hal_writeFile(CALIBRATION_CONFIG_FILE, buf, pos)) {
+        log("ERROR: failed to write calibration config");
+    }
+}
 
 // Helper: extract a string value from a JSON object ("key": ["line1", "line2"])
 static void jsonGetMixName(const char *json, const char *key, char out[2][17]) {
@@ -1101,6 +1156,50 @@ static void drawEditCell(int row, int col) {
     }
 }
 
+static void drawCalibrationScreen() {
+    hal_fillScreen(COL_DARK_BLUE);
+
+    hal_setTextDatum(HAL_DATUM_TC);
+    hal_setTextColor(COL_YELLOW, COL_DARK_BLUE);
+    char title[24];
+    snprintf(title, sizeof(title), "MOTOR %d", calibrationMotorId);
+    drawUiString(title, 160, 18, 2);
+
+    hal_setTextColor(COL_LIGHT_GRAY, COL_DARK_BLUE);
+    drawUiString("0 = CODE DEFAULT", 160, 48, 1);
+
+    char valueBuf[24];
+    snprintf(valueBuf, sizeof(valueBuf), "%+.1f s", calibrationSecondsPerMotor[calibrationMotorId - 1]);
+    hal_setTextColor(COL_WHITE, COL_DARK_BLUE);
+    drawUiString(valueBuf, 160, 78, 3);
+
+    const int btnW = 96;
+    const int btnH = 54;
+    const int btnY = 120;
+    const int leftX = 40;
+    const int rightX = 184;
+    hal_fillRect(leftX, btnY, btnW, btnH, COL_DARK_RED);
+    hal_drawRect(leftX, btnY, btnW, btnH, COL_WHITE);
+    hal_fillRect(rightX, btnY, btnW, btnH, COL_DARK_GREEN);
+    hal_drawRect(rightX, btnY, btnW, btnH, COL_WHITE);
+    hal_setTextDatum(HAL_DATUM_MC);
+    hal_setTextColor(COL_WHITE, COL_DARK_RED);
+    drawUiString("-", leftX + btnW / 2, btnY + btnH / 2, 4);
+    hal_setTextColor(COL_WHITE, COL_DARK_GREEN);
+    drawUiString("+", rightX + btnW / 2, btnY + btnH / 2, 4);
+
+    const int footerY = 190;
+    hal_fillRect(20, footerY, 120, 36, COL_GRAY);
+    hal_drawRect(20, footerY, 120, 36, COL_WHITE);
+    hal_setTextColor(COL_WHITE, COL_GRAY);
+    drawUiString("DEFAULT", 80, footerY + 18, 2);
+
+    hal_fillRect(180, footerY, 120, 36, COL_OK_BTN);
+    hal_drawRect(180, footerY, 120, 36, COL_WHITE);
+    hal_setTextColor(COL_WHITE, COL_OK_BTN);
+    drawUiString("SAVE", 240, footerY + 18, 2);
+}
+
 // --- View mix contents (with BACK / POUR buttons) ---
 static void drawViewMix(int mixId, const char *activeButton = nullptr) {
     hal_fillScreen(COL_DARK_TEAL);
@@ -1135,7 +1234,7 @@ static void drawViewMix(int mixId, const char *activeButton = nullptr) {
         int amt = syrupData[mixId - 1][i];
         if (amt > 0) {
             totalVolume += amt;
-            totalEstTime += amt * SECONDS_PER_UNIT;
+            totalEstTime += amt * effectiveSecondsPerUnit(i + 1);
         }
         activeMotors[activeCount++] = i + 1;
     }
@@ -1416,7 +1515,7 @@ static void refreshPouringScreen(int mixId,
     MotorDisplay md[MAX_CONCURRENT];
     float runFrac = 0;
     for (int i = 0; i < runningCount; i++) {
-        float dur = running[i].amount * SECONDS_PER_UNIT;
+        float dur = running[i].amount * effectiveSecondsPerUnit(running[i].id);
         float frac = dur > 0 ? (activeTime - running[i].startTime) / dur : 1.0f;
         if (frac < 0) frac = 0;
         if (frac > 1.0f) frac = 1.0f;
@@ -1527,7 +1626,7 @@ static PourResult executePour(int mixId) {
             running[runningCount++] = {mId, mAmt, activeTime};
             hal_motorOn(mId);
             logf("Motor %d: START — %d ml (%.1fs)",
-                 mId, mAmt, mAmt * SECONDS_PER_UNIT);
+                 mId, mAmt, mAmt * effectiveSecondsPerUnit(mId));
             nextPending++;
 
             // Inrush-current stagger (with stop-button polling)
@@ -1552,7 +1651,7 @@ static PourResult executePour(int mixId) {
 
         // ---- Check for completed motors ----
         for (int i = runningCount - 1; i >= 0; i--) {
-            float dur = running[i].amount * SECONDS_PER_UNIT;
+            float dur = running[i].amount * effectiveSecondsPerUnit(running[i].id);
             if (activeTime - running[i].startTime >= dur) {
                 hal_motorOff(running[i].id);
                 finishedUnits += running[i].amount;
@@ -1597,6 +1696,7 @@ void app_setup() {
     loadUiTranslations();
     loadLanguageConfig();
     loadBuzzerConfig();
+    loadCalibrationConfig();
 
     // Mix data
     loadMixes();
@@ -1834,9 +1934,9 @@ void app_loop() {
 
     // --------------------------------------------------
     case EDIT_DASHBOARD: {
-        beepTouch();
-        hal_waitForRelease();
         if (number == 9) {
+            beepTouch();
+            hal_waitForRelease();
             // SAVE
             saveMixes();
             logf("Mix %d saved", currentEditMix);
@@ -1850,21 +1950,70 @@ void app_loop() {
             appState = MAIN_MENU;
             resetGridColors();
             drawMainMenu();
-        } else {
-            int &val = syrupData[currentEditMix - 1][number - 1];
-            if (localX < BOX_W / 2) {
-                if (val > 0) val -= 1;
-            } else {
-                if (val < MAX_SYRUP_UNITS) val += 1;
-            }
-            logf("Motor %d set to %d (Mix %d)", number, val, currentEditMix);
+            break;
+        }
 
-            // Flash feedback then redraw just this cell
-            int x1 = col * BOX_W;
-            int y1 = row * BOX_H;
-            hal_fillRect(x1, y1, BOX_W, BOX_H, COL_CYAN);
-            hal_delay(50);
-            drawEditCell(row, col);
+        unsigned long pressStart = hal_millis();
+        bool longPressed = false;
+        int cellX = col * BOX_W;
+        int cellY = row * BOX_H;
+        while (!hal_shouldQuit()) {
+            uint16_t touchX = 0, touchY = 0;
+            bool touching = hal_getTouch(touchX, touchY);
+            if (!touching) break;
+            if (touchInRect(touchX, touchY, cellX, cellY, BOX_W, BOX_H)) {
+                if (hal_millis() - pressStart >= 500) {
+                    longPressed = true;
+                    break;
+                }
+            } else {
+                break;
+            }
+            hal_delay(20);
+        }
+
+        if (longPressed) {
+            calibrationMotorId = number;
+            appState = CALIBRATE_DURATION;
+            drawCalibrationScreen();
+            break;
+        }
+
+        beepTouch();
+        hal_waitForRelease();
+        int &val = syrupData[currentEditMix - 1][number - 1];
+        if (localX < BOX_W / 2) {
+            if (val > 0) val -= 1;
+        } else {
+            if (val < MAX_SYRUP_UNITS) val += 1;
+        }
+        logf("Motor %d set to %d (Mix %d)", number, val, currentEditMix);
+
+        // Flash feedback then redraw just this cell
+        hal_fillRect(cellX, cellY, BOX_W, BOX_H, COL_CYAN);
+        hal_delay(50);
+        drawEditCell(row, col);
+        break;
+    }
+
+    case CALIBRATE_DURATION: {
+        if (touchInRect(tx, ty, 40, 120, 96, 54)) {
+            beepTouch();
+            calibrationSecondsPerMotor[calibrationMotorId - 1] -= 1.0f;
+            drawCalibrationScreen();
+        } else if (touchInRect(tx, ty, 184, 120, 96, 54)) {
+            beepTouch();
+            calibrationSecondsPerMotor[calibrationMotorId - 1] += 1.0f;
+            drawCalibrationScreen();
+        } else if (touchInRect(tx, ty, 20, 190, 120, 36)) {
+            beepTouch();
+            calibrationSecondsPerMotor[calibrationMotorId - 1] = 0.0f;
+            drawCalibrationScreen();
+        } else if (touchInRect(tx, ty, 180, 190, 120, 36)) {
+            beepTouch();
+            saveCalibrationConfig();
+            appState = EDIT_DASHBOARD;
+            drawEditDashboard();
         }
         break;
     }
