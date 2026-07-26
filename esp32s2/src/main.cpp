@@ -1106,8 +1106,23 @@ static void drawViewMix(int mixId, const char *activeButton = nullptr) {
     // Title
     hal_setTextDatum(HAL_DATUM_TC);
     hal_setTextColor(COL_YELLOW, COL_DARK_TEAL);
-    char title[32];
-    uiTextFormat(title, sizeof(title), TXT_VIEW_TITLE_FMT, mixId);
+    char title[48];
+    const char *nameLine = nullptr;
+    if (mixId >= 1 && mixId <= 9) {
+        const char *line1 = mixNames[mixId - 1][0];
+        const char *line2 = mixNames[mixId - 1][1];
+        if (line1[0] != '\0') {
+            nameLine = line1;
+        } else if (line2[0] != '\0') {
+            nameLine = line2;
+        }
+    }
+
+    if (nameLine && nameLine[0] != '\0') {
+        snprintf(title, sizeof(title), "%s", nameLine);
+    } else {
+        uiTextFormat(title, sizeof(title), TXT_VIEW_TITLE_FMT, mixId);
+    }
     drawUiString(title, 160, 10, 2);
 
     int totalVolume = 0;
@@ -1174,12 +1189,31 @@ static void drawPouringLayout(int mixId, int totalMotors, bool paused) {
 
     // Title
     hal_setTextDatum(HAL_DATUM_TC);
-    char titleBuf[24];
+    char titleBuf[40];
+    const char *nameLine = nullptr;
+    if (mixId >= 1 && mixId <= 9) {
+        const char *line1 = mixNames[mixId - 1][0];
+        const char *line2 = mixNames[mixId - 1][1];
+        if (line1[0] != '\0') {
+            nameLine = line1;
+        } else if (line2[0] != '\0') {
+            nameLine = line2;
+        }
+    }
+
+    if (nameLine && nameLine[0] != '\0') {
+        snprintf(titleBuf, sizeof(titleBuf), "%s", nameLine);
+    } else {
+        if (paused) {
+            uiTextFormat(titleBuf, sizeof(titleBuf), TXT_PAUSED_MIX_FMT, mixId);
+        } else {
+            uiTextFormat(titleBuf, sizeof(titleBuf), TXT_POURING_MIX_FMT, mixId);
+        }
+    }
+
     if (paused) {
-        uiTextFormat(titleBuf, sizeof(titleBuf), TXT_PAUSED_MIX_FMT, mixId);
         hal_setTextColor(COL_PAUSE_TITLE, COL_DARK_BLUE);
     } else {
-        uiTextFormat(titleBuf, sizeof(titleBuf), TXT_POURING_MIX_FMT, mixId);
         hal_setTextColor(COL_TITLE_YELLOW, COL_DARK_BLUE);
     }
     drawUiString(titleBuf, 160, 8, 2);
@@ -1311,9 +1345,25 @@ static void drawSummaryScreen(int mixId, PourStatus status,
     hal_drawHLine(40, 55, 240, COL_GRAY);
 
     hal_setTextDatum(HAL_DATUM_MC);
-    char buf[32];
+    char buf[48];
     hal_setTextColor(COL_WHITE, COL_DARK_BLUE);
-    uiTextFormat(buf, sizeof(buf), TXT_SUMMARY_MIX_FMT, mixId);
+
+    const char *nameLine = nullptr;
+    if (mixId >= 1 && mixId <= 9) {
+        const char *line1 = mixNames[mixId - 1][0];
+        const char *line2 = mixNames[mixId - 1][1];
+        if (line1[0] != '\0') {
+            nameLine = line1;
+        } else if (line2[0] != '\0') {
+            nameLine = line2;
+        }
+    }
+
+    if (nameLine && nameLine[0] != '\0') {
+        snprintf(buf, sizeof(buf), "%s", nameLine);
+    } else {
+        uiTextFormat(buf, sizeof(buf), TXT_SUMMARY_MIX_FMT, mixId);
+    }
     drawUiString(buf, 160, 80, 2);
 
     hal_setTextColor(COL_LIGHT_GRAY, COL_DARK_BLUE);
