@@ -35,6 +35,13 @@ static void IRAM_ATTR touchISR() {
     touchPressed = true;
 }
 
+// The LCD is mounted upside down, so touch coordinates need to be mirrored
+// to match the displayed UI.
+static inline void applyTouchRotation180(uint16_t &x, uint16_t &y) {
+    x = (uint16_t)(tft.width() - 1 - x);
+    y = (uint16_t)(tft.height() - 1 - y);
+}
+
 // Convert HalColor (stores R8G8B8 packed) to RGB565
 static inline uint16_t toRGB565(HalColor c) {
     uint8_t r = (c >> 16) & 0xFF;
@@ -125,6 +132,7 @@ static bool getValidatedTouch(uint16_t &x, uint16_t &y) {
     }
     x = xs[0];
     y = ys[0];
+    applyTouchRotation180(x, y);
     return true;
 }
 
@@ -641,7 +649,7 @@ void setup() {
 
     // Display
     tft.init();
-    tft.setRotation(3);
+    tft.setRotation(1);
     tft.fillScreen(TFT_BLACK);
     tft.setTouch(touchCal);
 
