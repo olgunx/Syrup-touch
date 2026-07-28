@@ -539,8 +539,8 @@ static void beepPourDone() {
     hal_buzzerTone(2400, 260);
     hal_delay(90);
     hal_buzzerTone(2800, 360);
-    hal_delay(100);
-    hal_buzzerTone(3200, 520);
+    hal_delay(120);
+    hal_buzzerTone(2800, 360);
 }
 
 static void beepPourStopped() {
@@ -1273,7 +1273,7 @@ static void drawViewMix(int mixId, const char *activeButton = nullptr) {
     hal_drawRect(10, 190, 140, 38, COL_WHITE);
     hal_setTextDatum(HAL_DATUM_MC);
     hal_setTextColor(COL_WHITE, backCol);
-    drawUiString(uiText(TXT_BACK), 80, 205, 4);
+    drawUiString(uiText(TXT_BACK), 80, 208, 4);
 
     // POUR button
     HalColor pourCol = (activeButton && strcmp(activeButton, "POUR") == 0)
@@ -1319,23 +1319,17 @@ static void drawPouringLayout(int mixId, int totalMotors, bool paused) {
     }
     drawUiString(titleBuf, 160, 8, 2);
 
-    // Overall progress bar track (flat rectangle, no outline)
-    const int barX = 20, barY = 52, barW = 280, barH = 24;
+    // Overall progress bar track (larger, high-visibility)
+    const int barX = 16, barY = 48, barW = 288, barH = 34;
     hal_fillRect(barX, barY, barW, barH, hal_color(40, 40, 50));
 
-    // Separator
-    hal_drawHLine(20, 108, 280, COL_GRAY);
+    // Critical overall metrics
+    hal_drawHLine(16, 98, 288, COL_GRAY);
+    hal_drawHLine(16, 150, 288, COL_GRAY);
 
-    // Motor bar tracks (flat rectangles, no outline)
-    for (int i = 0; i < MAX_CONCURRENT; i++) {
-        int yBase = 140 + i * 24;
-        const int mbX = 100, mbW = 200, mbH = 10;
-        hal_fillRect(mbX, yBase - 5, mbW, mbH, hal_color(40, 40, 50));
-    }
-
-    // STOP and PAUSE/RESUME buttons (height increased by 20%, grows upward, moved up 10px)
-    const int btnH = int(36 * 1.2); // 43
-    const int btnY = 200 + 36 - btnH - 10; // Move up by 10px
+    // STOP and PAUSE/RESUME buttons
+    const int btnH = 36;
+    const int btnY = 198;
     hal_fillRect(20, btnY, 138, btnH, COL_STOP);
     hal_drawRect(20, btnY, 138, btnH, hal_color(255, 100, 100));
     hal_setTextDatum(HAL_DATUM_MC);
@@ -1367,14 +1361,20 @@ static void updatePouringScreen(int mixId,
 
     // Overall progress label
     hal_fillRect(0, 24, 320, 22, COL_DARK_BLUE);
-    hal_setTextDatum(HAL_DATUM_TC);
+    hal_setTextDatum(HAL_DATUM_TL);
     hal_setTextColor(COL_WHITE, COL_DARK_BLUE);
     char pctStr[24];
     uiTextFormat(pctStr, sizeof(pctStr), TXT_OVERALL_FMT, pct);
-    drawUiString(pctStr, 160, 32, 2);
+    drawUiString(pctStr, 16, 24, 2);
+
+    char volStr[24];
+    snprintf(volStr, sizeof(volStr), "%.1f/%.0f ml", overallDone * 10.0f, overallTotal * 10.0f);
+    hal_setTextDatum(HAL_DATUM_TR);
+    hal_setTextColor(COL_LIGHT_GRAY, COL_DARK_BLUE);
+    drawUiString(volStr, 304, 24, 2);
 
     // Overall progress bar fill (flat rectangle, no rounded corners)
-    const int barX = 20, barY = 52, barW = 280, barH = 24;
+    const int barX = 16, barY = 48, barW = 288, barH = 34;
     int fillW = (int)roundf(barW * overallFrac);
     // Draw background as flat rectangle
     hal_fillRect(barX, barY, barW, barH, hal_color(40, 40, 50));
@@ -1384,47 +1384,41 @@ static void updatePouringScreen(int mixId,
         hal_fillRect(barX, barY, minFill, barH, COL_CYAN_BAR);
     }
 
-    // Volume text
-    hal_setTextDatum(HAL_DATUM_MC);
-    char volStr[24]; snprintf(volStr, sizeof(volStr), "%.1f/%.0f ml", overallDone * 10.0f, overallTotal * 10.0f);
-    hal_setTextColor(COL_WHITE);
-    drawUiString(volStr, 160, barY + barH / 2, 1);
-
-    // Time info
-    hal_fillRect(0, 84, 320, 18, COL_DARK_BLUE);
+    // Time / active summary
     float remaining = (overallDone > 0.01f)
         ? elapsedSec * ((overallTotal - overallDone) / overallDone)
         : 0;
     if (remaining < 0) remaining = 0;
+    hal_fillRect(0, 84, 320, 16, COL_DARK_BLUE);
     char timeStr[48];
     uiTextFormat(timeStr, sizeof(timeStr), TXT_TIME_REMAINING_FMT, elapsedSec, remaining);
     hal_setTextColor(COL_LIGHT_GRAY, COL_DARK_BLUE);
-    drawUiString(timeStr, 160, 92, 1);
+    drawUiString(timeStr, 160, 94, 1);
 
     // Active motors label
-    hal_fillRect(0, 112, 320, 18, COL_DARK_BLUE);
+    hal_fillRect(0, 108, 320, 18, COL_DARK_BLUE);
     char activeStr[32];
     uiTextFormat(activeStr, sizeof(activeStr), TXT_ACTIVE_MOTORS_FMT, mCount, totalMotors);
-    drawUiString(activeStr, 160, 120, 1);
+    drawUiString(activeStr, 160, 116, 1);
 
-    // Per-motor progress bars (flat rectangles, no rounded corners)
-    for (int i = 0; i < MAX_CONCURRENT; i++) {
-        int yBase = 140 + i * 24;
-        const int mbX = 100, mbW = 200, mbH = 10;
-        hal_fillRect(0, yBase - 8, 98, 16, COL_DARK_BLUE);
-        // Draw background as flat rectangle
-        hal_fillRect(mbX, yBase - 5, mbW, mbH, hal_color(40, 40, 50));
+    // Active motor info list: text-only, two columns
+    const int leftColX = 16;
+    const int rightColX = 176;
+    int rowCount = (MAX_CONCURRENT + 1) / 2;
+    for (int row = 0; row < rowCount; row++) {
+        int yBase = 134 + row * 18;
+        hal_fillRect(0, yBase - 6, 320, 14, COL_DARK_BLUE);
 
-        if (i < mCount) {
-            char label[16];
-            snprintf(label, sizeof(label), "M%d: %d%%", mDisp[i].id, mDisp[i].fracPercent);
+        for (int col = 0; col < 2; col++) {
+            int i = row * 2 + col;
+            if (i >= mCount) continue;
+
+            int xBase = col == 0 ? leftColX : rightColX;
+            char label[28];
+            snprintf(label, sizeof(label), "M%d  %d%%", mDisp[i].id, mDisp[i].fracPercent);
             hal_setTextDatum(HAL_DATUM_ML);
             hal_setTextColor(COL_LIGHT_GRAY, COL_DARK_BLUE);
-            drawUiString(label, 20, yBase, 1);
-
-            int mfW = mbW * mDisp[i].fracPercent / 100;
-            if (mfW > 0)
-                hal_fillRect(mbX, yBase - 5, mfW, mbH, COL_GREEN_BAR);
+            drawUiString(label, xBase, yBase, 1);
         }
     }
 }
@@ -1568,6 +1562,11 @@ static PourResult executePour(int mixId) {
 
     // Draw the static layout once
     drawPouringLayout(mixId, totalMotors, false);
+    refreshPouringScreen(mixId, running, runningCount, totalMotors,
+                         finishedUnits, totalUnits,
+                         getActivePourTime(t0, totalPauseMs, paused, pauseStart),
+                         false);
+    lastDisplayUpdate = hal_millis();
 
     // --- Main pour loop ---
     while ((nextPending < pendingCount || runningCount > 0) && !hal_shouldQuit()) {
@@ -1627,6 +1626,9 @@ static PourResult executePour(int mixId) {
             hal_motorOn(mId);
             logf("Motor %d: START — %d ml (%.1fs)",
                  mId, mAmt, mAmt * effectiveSecondsPerUnit(mId));
+            refreshPouringScreen(mixId, running, runningCount, totalMotors,
+                                 finishedUnits, totalUnits, activeTime, false);
+            lastDisplayUpdate = hal_millis();
             nextPending++;
 
             // Inrush-current stagger (with stop-button polling)

@@ -198,8 +198,8 @@
   <h3>FR-9. Pour execution rules</h3>
   <ul>
     <li>Each syrup unit shall correspond to 10.0 seconds of motor runtime.</li>
-    <li>No more than 2 motors shall run at the same time.</li>
-    <li>When two motors are started in sequence, the second start shall be delayed by 500 ms to reduce inrush current.</li>
+    <li>No more than 3 motors shall run at the same time.</li>
+    <li>When motors are started in sequence, each start after the first shall be delayed by 500 ms to reduce inrush current.</li>
     <li>Each motor shall remain active until its configured amount has completed based on the time-per-unit setting.</li>
     <li>When a motor completes, the software shall turn that motor off and continue with any remaining queued motors.</li>
     <li>At the end of a pour, the software shall turn off all motors as a safety action.</li>
@@ -211,7 +211,7 @@
     <li>The progress screen shall display overall percentage complete.</li>
     <li>The progress screen shall display completed and total volume in ml.</li>
     <li>The progress screen shall display elapsed time and estimated remaining time.</li>
-    <li>The progress screen shall display up to 2 active motor progress indicators, matching the maximum concurrency limit.</li>
+    <li>The progress screen shall display up to 3 active motor progress indicators, matching the maximum concurrency limit.</li>
     <li>The progress screen shall provide STOP and PAUSE or RESUME actions.</li>
   </ul>
 
@@ -284,7 +284,7 @@
     <li>Verify that empty recipes do not show a summary screen after POUR is pressed.</li>
     <li>Verify that pause excludes paused duration from the elapsed-time figure.</li>
     <li>Verify that STOP works both during active pouring and during the start stagger period.</li>
-    <li>Verify that no more than 2 motors are active at once.</li>
+    <li>Verify that no more than 3 motors are active at once.</li>
     <li>Verify that all motors are off after completion, stop, and application exit from the pour loop.</li>
   </ul>
 

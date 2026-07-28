@@ -42,8 +42,8 @@ Each motor uses a GPIO pair (IN1 = forward, IN2 = reverse). For pumps, only IN1 
 | Motor 7 | syrup_7 | 13 | 14 |
 | Motor 8 | syrup_8 | 17 | 21 |
 
-- Max **2 motors** run concurrently to limit inrush current
-- **500 ms stagger delay** between starting motors in a pair
+- Max **3 motors** run concurrently to limit inrush current
+- **500 ms stagger delay** between sequential motor starts
 - Pour rate: **5.56 s per unit** (configurable in `config.h`)
 
 ## Architecture — HAL Abstraction
@@ -163,7 +163,7 @@ After entering the passcode, select a mix (1–9) to edit. Tap a syrup channel t
 
 When POUR is pressed, the machine dispenses all configured syrups:
 
-- Motors start in pairs (max 2 concurrent) with a 500 ms inrush stagger
+- Motors start with a 500 ms inrush stagger between sequential starts
 - A progress screen shows overall completion %, elapsed/remaining time, and per-motor status
 - **PAUSE/RESUME** and **STOP** buttons available during pour
 - All events are logged with timestamps
@@ -177,7 +177,7 @@ constexpr int   FONT_SIZE_BOXNUMBER = 35;      // grid cell number font size (0-
 constexpr int   FONT_SIZE_BOXNAME   = 9;       // mix name font size in points (7,8,9,10,11,12)
 constexpr float SECONDS_PER_UNIT    = 5.5556f; // pour time per 10ml unit (seconds)
 constexpr int   STAGGER_DELAY_MS    = 500;     // stagger between motor starts (ms)
-constexpr int   MAX_CONCURRENT      = 2;       // max simultaneous motors
+constexpr int   MAX_CONCURRENT      = 3;       // max simultaneous motors
 constexpr int   SECRET_CODE[4]      = {4, 7, 2, 5}; // passcode to enter edit mode
 constexpr const char *WIFI_AP_SSID  = "SyrupTouch";  // WiFi access point name
 constexpr const char *WIFI_AP_PASS  = "syrup1234";   // WiFi password (min 8 chars)
