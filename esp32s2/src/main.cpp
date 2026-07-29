@@ -37,8 +37,11 @@ static void fillRoundRect(int x, int y, int w, int h, int r, HalColor c) {
 // ============================================
 // APPLICATION STATE
 // ============================================
-enum AppState { MAIN_MENU, VIEW_MIX, SELECT_MIX, EDIT_DASHBOARD, CALIBRATE_DURATION };
+enum AppState { MAIN_MENU, VIEW_MIX, SELECT_MIX, EDIT_DASHBOARD, CALIBRATE_DURATION, CLEANING_WARNING };
 AppState appState = MAIN_MENU;
+int warningMotorId = 1;
+enum CalibrationPage { CALIB_PAGE_DURATION, CALIB_PAGE_CLEANING };
+static CalibrationPage calibrationPage = CALIB_PAGE_DURATION;
 
 enum UiLanguage { LANG_EN = 0, LANG_TR = 1 };
 static UiLanguage currentLanguage = LANG_EN;
@@ -52,7 +55,43 @@ char mixNames[9][2][17]; // 2 lines, 16 chars + null each
 int currentEditMix = 1;
 int currentViewMix = 1;
 float calibrationSecondsPerMotor[8] = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+float cleaningThresholdLiters[8] = {10.0f, 10.0f, 10.0f, 10.0f, 10.0f, 10.0f, 10.0f, 10.0f};
+int cleaningUsedMl[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+unsigned long cleaningSnoozeUntilMs[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 int calibrationMotorId = 1;
+static volatile bool webActionPending = false;
+static volatile int webPourMixId = 0;
+static volatile int webMotorActionId = 0;
+static volatile int webCalibrationMotorId = 0;
+static volatile int webCalibrationDelta = 0;
+static volatile bool webCalibrationReset = false;
+static volatile bool webCalibrationSave = false;
+static volatile bool webToggleBuzzerPending = false;
+static volatile bool webToggleLanguagePending = false;
+static volatile bool webToggleWifiPending = false;
+static volatile int webActionKind = 0;
+static bool manualMotorState[8] = {false, false, false, false, false, false, false, false};
+static volatile bool webStopPourPending = false;
+static volatile bool webPourActiveFlag = false;
+static volatile int webPourCurrentMix = 0;
+static volatile float webPourElapsedSec = 0.0f;
+static volatile float webPourTotalUnits = 0.0f;
+static volatile int webPourStatus = 0;
+static volatile bool webPourIsPaused = false;
+
+enum WebActionKind {
+    WEB_ACTION_NONE = 0,
+    WEB_ACTION_POUR = 1,
+    WEB_ACTION_MOTOR_ON = 2,
+    WEB_ACTION_MOTOR_OFF = 3,
+    WEB_ACTION_TOGGLE_BUZZER = 4,
+    WEB_ACTION_TOGGLE_LANGUAGE = 5,
+    WEB_ACTION_TOGGLE_WIFI = 6,
+    WEB_ACTION_SET_CALIB_MOTOR = 7,
+    WEB_ACTION_ADJUST_CALIB = 8,
+    WEB_ACTION_RESET_CALIB = 9,
+    WEB_ACTION_SAVE_CALIB = 10,
+};
 
 // ============================================
 // PASSCODE
@@ -108,6 +147,7 @@ static HalColor COL_DEFAULT, COL_PURPLE, COL_TEAL, COL_DARK_TEAL, COL_DARK_BLUE;
 static HalColor COL_DARK_RED, COL_DARK_GREEN, COL_LIGHT_RED, COL_LIGHT_GREEN, COL_RED;
 static HalColor COL_CYAN_BAR, COL_GREEN_BAR, COL_STOP, COL_PAUSE, COL_RESUME;
 static HalColor COL_OK_BTN, COL_GRAY, COL_LIGHT_GRAY, COL_TITLE_YELLOW, COL_PAUSE_TITLE;
+static bool buzzerEnabled = true;
 
 static void initColors() {
     COL_BLACK        = hal_color(0, 0, 0);
@@ -194,6 +234,61 @@ static void logf(const char *fmt, ...) {
     hal_log(buf);
 }
 
+static void drawMainMenu();
+static void drawSelectMix();
+static void drawEditDashboard();
+static void drawCalibrationScreen();
+static void drawViewMix(int mixId, const char *activeButton = nullptr);
+static void drawSummaryScreen(int mixId, PourStatus status, float elapsed, int motorsUsed, int totalUnits);
+static PourResult executePour(int mixId);
+
+int app_webCurrentState() { return (int)appState; }
+int app_webCurrentViewMix() { return currentViewMix; }
+int app_webCurrentEditMix() { return currentEditMix; }
+bool app_webBuzzerEnabled() { return buzzerEnabled; }
+int app_webLanguage() { return (int)currentLanguage; }
+bool app_webWifiActive() { return hal_wifiIsActive(); }
+int app_webCurrentCalibrationMotor() { return calibrationMotorId; }
+void app_webGetCalibrationValue(int motorId, float &value) {
+    value = 0.0f;
+    if (motorId >= 1 && motorId <= 8) value = calibrationSecondsPerMotor[motorId - 1];
+}
+bool app_webMotorIsManualOn(int motorId) {
+    if (motorId < 1 || motorId > 8) return false;
+    return manualMotorState[motorId - 1];
+}
+void app_webGetMixValue(int mixId, int motorId, int &value) {
+    value = 0;
+    if (mixId >= 1 && mixId <= 9 && motorId >= 1 && motorId <= 8) value = syrupData[mixId - 1][motorId - 1];
+}
+const char* app_webMixName(int mixId, int line) {
+    static const char *empty = "";
+    if (mixId < 1 || mixId > 9 || line < 0 || line > 1) return empty;
+    return mixNames[mixId - 1][line];
+}
+bool app_webPourActive() { return webPourActiveFlag; }
+int app_webPourMix() { return webPourCurrentMix; }
+const char* app_webPourStatusText() {
+    if (!webPourActiveFlag) return "Idle";
+    if (webPourIsPaused) return "Paused";
+    return "Pouring";
+}
+float app_webPourElapsed() { return webPourElapsedSec; }
+float app_webPourTotal() { return webPourTotalUnits * 10.0f; }
+void app_webRequestStopPour() { webStopPourPending = true; }
+bool app_webHasPendingWebAction() { return webActionPending; }
+void app_webClearPendingWebAction() { webActionPending = false; webActionKind = WEB_ACTION_NONE; }
+void app_webRequestPourMix(int mixId) { webPourMixId = mixId; webActionKind = WEB_ACTION_POUR; webActionPending = true; }
+void app_webRequestMotorOn(int motorId) { webMotorActionId = motorId; webActionKind = WEB_ACTION_MOTOR_ON; webActionPending = true; }
+void app_webRequestMotorOff(int motorId) { webMotorActionId = motorId; webActionKind = WEB_ACTION_MOTOR_OFF; webActionPending = true; }
+void app_webRequestToggleBuzzer() { webActionKind = WEB_ACTION_TOGGLE_BUZZER; webActionPending = true; }
+void app_webRequestToggleLanguage() { webActionKind = WEB_ACTION_TOGGLE_LANGUAGE; webActionPending = true; }
+void app_webRequestToggleWifi() { webActionKind = WEB_ACTION_TOGGLE_WIFI; webActionPending = true; }
+void app_webRequestSetCalibrationMotor(int motorId) { webCalibrationMotorId = motorId; webActionKind = WEB_ACTION_SET_CALIB_MOTOR; webActionPending = true; }
+void app_webRequestAdjustCalibration(int delta) { webCalibrationDelta = delta; webActionKind = WEB_ACTION_ADJUST_CALIB; webActionPending = true; }
+void app_webRequestResetCalibration() { webCalibrationReset = true; webActionKind = WEB_ACTION_RESET_CALIB; webActionPending = true; }
+void app_webRequestSaveCalibration() { webCalibrationSave = true; webActionKind = WEB_ACTION_SAVE_CALIB; webActionPending = true; }
+
 // ============================================
 // TOUCH HELPERS
 // ============================================
@@ -216,7 +311,6 @@ static float effectiveSecondsPerUnit(int motorId) {
 static const char *BUZZER_CONFIG_FILE = "/buzzer_config.json";
 static const char *LANGUAGE_CONFIG_FILE = "/language_config.json";
 static const char *UI_TRANSLATIONS_FILE = "/ui_translations.csv";
-static bool buzzerEnabled = true;
 
 enum UiTextId {
     TXT_STATUS_TITLE,
@@ -630,32 +724,113 @@ static void saveLanguageConfig() {
 }
 
 static void loadCalibrationConfig() {
-    char buf[128];
+    char buf[512];
     int n = hal_readFile(CALIBRATION_CONFIG_FILE, buf, sizeof(buf));
     if (n <= 0) {
-        for (int i = 0; i < 8; i++) calibrationSecondsPerMotor[i] = 0.0f;
+        for (int i = 0; i < 8; i++) {
+            calibrationSecondsPerMotor[i] = 0.0f;
+            cleaningThresholdLiters[i] = 10.0f;
+            cleaningUsedMl[i] = 0;
+        }
         return;
     }
+    char keyT[16], keyU[16];
     for (int i = 0; i < 8; i++) {
         char key[16];
         snprintf(key, sizeof(key), "motor_%d", i + 1);
         calibrationSecondsPerMotor[i] = jsonGetFloat(buf, key, 0.0f);
+        
+        snprintf(keyT, sizeof(keyT), "cThresh_%d", i + 1);
+        cleaningThresholdLiters[i] = jsonGetFloat(buf, keyT, 10.0f);
+        
+        snprintf(keyU, sizeof(keyU), "cUsed_%d", i + 1);
+        cleaningUsedMl[i] = (int)jsonGetFloat(buf, keyU, 0.0f);
     }
 }
 
 static void saveCalibrationConfig() {
-    char buf[256];
+    char buf[512];
     int pos = 0;
     pos += snprintf(buf + pos, sizeof(buf) - pos, "{");
     for (int i = 0; i < 8; i++) {
         pos += snprintf(buf + pos, sizeof(buf) - pos,
-                        "%s\"motor_%d\":%.2f",
+                        "%s\"motor_%d\":%.2f,\"cThresh_%d\":%.2f,\"cUsed_%d\":%d",
                         (i > 0) ? "," : "",
-                        i + 1, calibrationSecondsPerMotor[i]);
+                        i + 1, calibrationSecondsPerMotor[i],
+                        i + 1, cleaningThresholdLiters[i],
+                        i + 1, cleaningUsedMl[i]);
     }
     pos += snprintf(buf + pos, sizeof(buf) - pos, "}");
     if (!hal_writeFile(CALIBRATION_CONFIG_FILE, buf, pos)) {
         log("ERROR: failed to write calibration config");
+    }
+}
+
+static void processPendingWebAction() {
+    if (!webActionPending) return;
+    int action = webActionKind;
+    webActionPending = false;
+    webActionKind = WEB_ACTION_NONE;
+
+    switch (action) {
+        case WEB_ACTION_POUR: {
+            if (webPourMixId >= 1 && webPourMixId <= 9) {
+                currentViewMix = webPourMixId;
+                appState = VIEW_MIX;
+                drawViewMix(currentViewMix);
+                PourResult result = executePour(currentViewMix);
+                drawSummaryScreen(currentViewMix, result.status, result.elapsed, result.motors, result.units);
+            }
+            break;
+        }
+        case WEB_ACTION_MOTOR_ON:
+            if (webMotorActionId >= 1 && webMotorActionId <= 8) {
+                hal_motorOn(webMotorActionId);
+                manualMotorState[webMotorActionId - 1] = true;
+            }
+            break;
+        case WEB_ACTION_MOTOR_OFF:
+            if (webMotorActionId >= 1 && webMotorActionId <= 8) {
+                hal_motorOff(webMotorActionId);
+                manualMotorState[webMotorActionId - 1] = false;
+            }
+            break;
+        case WEB_ACTION_TOGGLE_BUZZER: {
+            bool wasEnabled = buzzerEnabled;
+            buzzerEnabled = !buzzerEnabled;
+            saveBuzzerConfig();
+            if (!wasEnabled && buzzerEnabled) beepTouch();
+            break;
+        }
+        case WEB_ACTION_TOGGLE_LANGUAGE:
+            currentLanguage = (currentLanguage == LANG_EN) ? LANG_TR : LANG_EN;
+            saveLanguageConfig();
+            break;
+        case WEB_ACTION_TOGGLE_WIFI:
+            if (hal_wifiIsActive()) hal_wifiStop(); else hal_wifiStart();
+            break;
+        case WEB_ACTION_SET_CALIB_MOTOR:
+            if (webCalibrationMotorId >= 1 && webCalibrationMotorId <= 8) {
+                calibrationMotorId = webCalibrationMotorId;
+                appState = CALIBRATE_DURATION;
+                drawCalibrationScreen();
+            }
+            break;
+        case WEB_ACTION_ADJUST_CALIB:
+            if (calibrationMotorId >= 1 && calibrationMotorId <= 8) {
+                calibrationSecondsPerMotor[calibrationMotorId - 1] += (float)webCalibrationDelta * 0.1f;
+                drawCalibrationScreen();
+            }
+            break;
+        case WEB_ACTION_RESET_CALIB:
+            for (int i = 0; i < 8; i++) calibrationSecondsPerMotor[i] = 0.0f;
+            drawCalibrationScreen();
+            break;
+        case WEB_ACTION_SAVE_CALIB:
+            saveCalibrationConfig();
+            break;
+        default:
+            break;
     }
 }
 
@@ -1163,15 +1338,44 @@ static void drawCalibrationScreen() {
     hal_setTextColor(COL_YELLOW, COL_DARK_BLUE);
     char title[24];
     snprintf(title, sizeof(title), "MOTOR %d", calibrationMotorId);
-    drawUiString(title, 160, 18, 2);
+    drawUiString(title, 160, 4, 2);
 
-    hal_setTextColor(COL_LIGHT_GRAY, COL_DARK_BLUE);
-    drawUiString("0 = CODE DEFAULT", 160, 48, 1);
+    const int tabW = 140, tabH = 30;
+    HalColor colDur = (calibrationPage == CALIB_PAGE_DURATION) ? COL_OK_BTN : COL_GRAY;
+    HalColor colCln = (calibrationPage == CALIB_PAGE_CLEANING) ? COL_OK_BTN : COL_GRAY;
+    HalColor colDurBorder = (calibrationPage == CALIB_PAGE_DURATION) ? COL_YELLOW : COL_GRAY;
+    HalColor colClnBorder = (calibrationPage == CALIB_PAGE_CLEANING) ? COL_YELLOW : COL_GRAY;
+    hal_fillRect(10, 30, tabW, tabH, colDur);
+    hal_drawRect(10, 30, tabW, tabH, colDurBorder);
+    hal_fillRect(170, 30, tabW, tabH, colCln);
+    hal_drawRect(170, 30, tabW, tabH, colClnBorder);
+    
+    hal_setTextDatum(HAL_DATUM_MC);
+    hal_setTextColor(COL_WHITE, colDur);
+    drawUiString("DURATION", 10 + tabW/2, 30 + tabH/2, 1);
+    hal_setTextColor(COL_WHITE, colCln);
+    drawUiString("CLEANING", 170 + tabW/2, 30 + tabH/2, 1);
 
-    char valueBuf[24];
-    snprintf(valueBuf, sizeof(valueBuf), "%+.1f s", calibrationSecondsPerMotor[calibrationMotorId - 1]);
-    hal_setTextColor(COL_WHITE, COL_DARK_BLUE);
-    drawUiString(valueBuf, 160, 78, 1);
+    hal_setTextDatum(HAL_DATUM_TC);
+    if (calibrationPage == CALIB_PAGE_DURATION) {
+        hal_setTextColor(COL_LIGHT_GRAY, COL_DARK_BLUE);
+        drawUiString("0 = CODE DEFAULT", 160, 68, 1);
+
+        char valueBuf[24];
+        snprintf(valueBuf, sizeof(valueBuf), "%+.1f s", calibrationSecondsPerMotor[calibrationMotorId - 1]);
+        hal_setTextColor(COL_WHITE, COL_DARK_BLUE);
+        drawUiString(valueBuf, 160, 88, 1);
+    } else {
+        hal_setTextColor(COL_LIGHT_GRAY, COL_DARK_BLUE);
+        char usedBuf[32];
+        snprintf(usedBuf, sizeof(usedBuf), "USED: %.1f L", cleaningUsedMl[calibrationMotorId - 1] / 1000.0f);
+        drawUiString(usedBuf, 160, 68, 1);
+
+        char valueBuf[24];
+        snprintf(valueBuf, sizeof(valueBuf), "LIMIT: %.1f L", cleaningThresholdLiters[calibrationMotorId - 1]);
+        hal_setTextColor(COL_WHITE, COL_DARK_BLUE);
+        drawUiString(valueBuf, 160, 88, 1);
+    }
 
     const int btnW = 96;
     const int btnH = 54;
@@ -1201,7 +1405,7 @@ static void drawCalibrationScreen() {
 }
 
 // --- View mix contents (with BACK / POUR buttons) ---
-static void drawViewMix(int mixId, const char *activeButton = nullptr) {
+static void drawViewMix(int mixId, const char *activeButton) {
     hal_fillScreen(COL_DARK_TEAL);
 
     // Title
@@ -1542,6 +1746,13 @@ static PourResult executePour(int mixId) {
     int totalMotors = pendingCount;
     int totalUnits  = 0;
     for (int i = 0; i < pendingCount; i++) totalUnits += pending[i].amount;
+    webPourActiveFlag = true;
+    webPourCurrentMix = mixId;
+    webPourElapsedSec = 0.0f;
+    webPourTotalUnits = (float)totalUnits;
+    webPourStatus = 1;
+    webPourIsPaused = false;
+    webStopPourPending = false;
 
     logf("DISPENSING Mix %d — %d motors, %d ml, max %d concurrent",
          mixId, totalMotors, totalUnits, MAX_CONCURRENT);
@@ -1570,6 +1781,13 @@ static PourResult executePour(int mixId) {
 
     // --- Main pour loop ---
     while ((nextPending < pendingCount || runningCount > 0) && !hal_shouldQuit()) {
+        hal_wifiProcess();
+        if (webStopPourPending) {
+            cancelled = true;
+            break;
+        }
+        webPourElapsedSec = getActivePourTime(t0, totalPauseMs, paused, pauseStart);
+        webPourIsPaused = paused;
 
         // ---- Check touch for STOP / PAUSE ----
         uint16_t tx, ty;
@@ -1636,6 +1854,11 @@ static PourResult executePour(int mixId) {
                 logf("Inrush stagger %dms", STAGGER_DELAY_MS);
                 unsigned long staggerEnd = hal_millis() + STAGGER_DELAY_MS;
                 while (hal_millis() < staggerEnd && !hal_shouldQuit()) {
+                    hal_wifiProcess();
+                    if (webStopPourPending) {
+                        cancelled = true;
+                        break;
+                    }
                     uint16_t bx, by;
                     if (hal_getTouch(bx, by) && by >= 200
                         && bx >= 20 && bx <= 158) {
@@ -1657,7 +1880,9 @@ static PourResult executePour(int mixId) {
             if (activeTime - running[i].startTime >= dur) {
                 hal_motorOff(running[i].id);
                 finishedUnits += running[i].amount;
-                logf("Motor %d: DONE — %d ml", running[i].id, running[i].amount);
+                int motorIdx = running[i].id - 1;
+                cleaningUsedMl[motorIdx] += running[i].amount * 10;
+                logf("Motor %d: DONE — %d ml", running[i].id, running[i].amount * 10);
                 running[i] = running[--runningCount];   // swap-remove
             }
         }
@@ -1682,6 +1907,16 @@ static PourResult executePour(int mixId) {
     else
         logf("Pour COMPLETE in %.1fs", elapsed);
 
+    webPourActiveFlag = false;
+    webPourCurrentMix = 0;
+    webPourElapsedSec = elapsed;
+    webPourTotalUnits = (float)totalUnits;
+    webPourStatus = cancelled ? 2 : 3;
+    webPourIsPaused = false;
+    
+    // Save calibration config after pour to persist cleaningUsedMl
+    saveCalibrationConfig();
+    
     return {st, elapsed, totalMotors, totalUnits};
 }
 
@@ -1710,6 +1945,40 @@ void app_setup() {
     hal_log("System Ready. Waiting for input...");
 }
 
+static void drawCleaningWarningScreen(int motorId) {
+    hal_fillScreen(COL_DARK_RED);
+
+    hal_setTextDatum(HAL_DATUM_TC);
+    hal_setTextColor(COL_YELLOW, COL_DARK_RED);
+    char title[32];
+    snprintf(title, sizeof(title), "CLEAN MOTOR %d", motorId);
+    drawUiString(title, 160, 20, 2);
+
+    hal_setTextColor(COL_WHITE, COL_DARK_RED);
+    drawUiString("Maintenance Required!", 160, 60, 1);
+    
+    char usedBuf[32];
+    snprintf(usedBuf, sizeof(usedBuf), "Used: %.1f L", cleaningUsedMl[motorId - 1] / 1000.0f);
+    drawUiString(usedBuf, 160, 100, 2);
+
+    const int btnW = 120;
+    const int btnH = 46;
+    const int btnY = 160;
+    const int leftX = 20;
+    const int rightX = 180;
+    
+    hal_fillRect(leftX, btnY, btnW, btnH, COL_DARK_GREEN);
+    hal_drawRect(leftX, btnY, btnW, btnH, COL_WHITE);
+    hal_setTextDatum(HAL_DATUM_MC);
+    hal_setTextColor(COL_WHITE, COL_DARK_GREEN);
+    drawUiString("RESET", leftX + btnW / 2, btnY + btnH / 2, 2);
+    
+    hal_fillRect(rightX, btnY, btnW, btnH, COL_GRAY);
+    hal_drawRect(rightX, btnY, btnW, btnH, COL_WHITE);
+    hal_setTextColor(COL_WHITE, COL_GRAY);
+    drawUiString("LATER(5M)", rightX + btnW / 2, btnY + btnH / 2, 2);
+}
+
 // ============================================
 // APP LOOP — state machine (called repeatedly by HAL)
 // ============================================
@@ -1727,6 +1996,23 @@ void app_loop() {
             drawMainMenu();
         }
         hal_log("Mixes reloaded from web update");
+    }
+
+    processPendingWebAction();
+
+    if (appState == MAIN_MENU) {
+        for (int i = 0; i < 8; i++) {
+            if (cleaningThresholdLiters[i] > 0.0f) {
+                if (cleaningUsedMl[i] >= cleaningThresholdLiters[i] * 1000.0f) {
+                    if (cleaningSnoozeUntilMs[i] == 0 || hal_millis() >= cleaningSnoozeUntilMs[i]) {
+                        appState = CLEANING_WARNING;
+                        warningMotorId = i + 1;
+                        drawCleaningWarningScreen(warningMotorId);
+                        return; // return so it doesn't process main menu touch in this frame
+                    }
+                }
+            }
+        }
     }
 
     // --- Heartbeat ---
@@ -1999,23 +2285,63 @@ void app_loop() {
     }
 
     case CALIBRATE_DURATION: {
-        if (touchInRect(tx, ty, 40, 120, 96, 54)) {
+        if (touchInRect(tx, ty, 10, 30, 140, 30)) {
             beepTouch();
-            calibrationSecondsPerMotor[calibrationMotorId - 1] -= 1.0f;
+            calibrationPage = CALIB_PAGE_DURATION;
+            drawCalibrationScreen();
+        } else if (touchInRect(tx, ty, 170, 30, 140, 30)) {
+            beepTouch();
+            calibrationPage = CALIB_PAGE_CLEANING;
+            drawCalibrationScreen();
+        } else if (touchInRect(tx, ty, 40, 120, 96, 54)) {
+            beepTouch();
+            if (calibrationPage == CALIB_PAGE_DURATION) {
+                calibrationSecondsPerMotor[calibrationMotorId - 1] -= 1.0f;
+            } else {
+                cleaningThresholdLiters[calibrationMotorId - 1] -= 1.0f;
+                if (cleaningThresholdLiters[calibrationMotorId - 1] < 0.0f) 
+                    cleaningThresholdLiters[calibrationMotorId - 1] = 0.0f;
+            }
             drawCalibrationScreen();
         } else if (touchInRect(tx, ty, 184, 120, 96, 54)) {
             beepTouch();
-            calibrationSecondsPerMotor[calibrationMotorId - 1] += 1.0f;
+            if (calibrationPage == CALIB_PAGE_DURATION) {
+                calibrationSecondsPerMotor[calibrationMotorId - 1] += 1.0f;
+            } else {
+                cleaningThresholdLiters[calibrationMotorId - 1] += 1.0f;
+            }
             drawCalibrationScreen();
         } else if (touchInRect(tx, ty, 20, 190, 120, 36)) {
             beepTouch();
-            calibrationSecondsPerMotor[calibrationMotorId - 1] = 0.0f;
+            if (calibrationPage == CALIB_PAGE_DURATION) {
+                calibrationSecondsPerMotor[calibrationMotorId - 1] = 0.0f;
+            } else {
+                cleaningThresholdLiters[calibrationMotorId - 1] = 10.0f;
+            }
             drawCalibrationScreen();
         } else if (touchInRect(tx, ty, 180, 190, 120, 36)) {
             beepTouch();
             saveCalibrationConfig();
             appState = EDIT_DASHBOARD;
             drawEditDashboard();
+        }
+        break;
+    }
+    case CLEANING_WARNING: {
+        if (touchInRect(tx, ty, 20, 160, 120, 46)) { // RESET
+            beepTouch();
+            cleaningUsedMl[warningMotorId - 1] = 0;
+            cleaningSnoozeUntilMs[warningMotorId - 1] = 0;
+            saveCalibrationConfig();
+            appState = MAIN_MENU;
+            resetGridColors();
+            drawMainMenu();
+        } else if (touchInRect(tx, ty, 180, 160, 120, 46)) { // LATER(5M)
+            beepTouch();
+            cleaningSnoozeUntilMs[warningMotorId - 1] = hal_millis() + 5 * 60 * 1000;
+            appState = MAIN_MENU;
+            resetGridColors();
+            drawMainMenu();
         }
         break;
     }

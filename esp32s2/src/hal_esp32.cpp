@@ -368,6 +368,95 @@ static void handleIndex() {
     f.close();
 }
 
+static const char CONTROLS_PAGE[] PROGMEM = R"rawhtml(
+<!DOCTYPE html><html><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Controls</title>
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;background:#1a1a2e;color:#e0e0e0;padding:12px;max-width:980px;margin:0 auto}
+h1{text-align:center;color:#00d4aa;margin:12px 0 16px;font-size:1.4em}
+.card{background:#16213e;border:1px solid #0f3460;border-radius:10px;padding:14px;margin-bottom:12px}
+.card h2{font-size:1em;color:#00d4aa;margin-bottom:10px}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+.btn{padding:10px 12px;border:none;border-radius:8px;font-size:.92em;font-weight:600;cursor:pointer}
+.btn:active{opacity:.8}
+.btn-main{background:#00d4aa;color:#1a1a2e}
+.btn-blue{background:#0f3460;color:#e0e0e0;border:1px solid #1a4080}
+.btn-warn{background:#e67e22;color:#fff}
+.btn-danger{background:#c0392b;color:#fff}
+.mix-grid,.motor-grid,.cal-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.motor-grid{grid-template-columns:repeat(4,1fr)}
+.mix-item,.motor-item,.cal-item{background:#0f3460;border:1px solid #1a4080;border-radius:8px;padding:10px}
+.small{font-size:.8em;color:#8892b0;line-height:1.4}
+.status{font-size:.9em;color:#d0d7ff;margin-top:6px}
+a{color:#00d4aa;text-decoration:none}
+.toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:#00d4aa;color:#1a1a2e;padding:10px 24px;border-radius:8px;font-weight:600;display:none;z-index:99}
+@media(max-width:720px){.motor-grid,.mix-grid,.cal-grid{grid-template-columns:repeat(2,1fr)}}
+</style></head><body>
+<h1>&#9881; Controls</h1>
+<div class="card">
+  <h2>Global</h2>
+  <div class="row">
+    <button class="btn btn-blue" onclick="send({action:'wifi_toggle'})">WiFi Toggle</button>
+    <button class="btn btn-blue" onclick="send({action:'buzzer_toggle'})">Buzzer Toggle</button>
+    <button class="btn btn-blue" onclick="send({action:'language_toggle'})">Language Toggle</button>
+  </div>
+  <div id="globalState" class="status"></div>
+</div>
+<div class="card">
+  <h2>Current Pour</h2>
+  <div id="pourState" class="status">Idle</div>
+  <div class="row">
+    <button id="stopPourBtn" class="btn btn-danger" style="display:none" onclick="send({action:'pour_stop'})">Stop Pour</button>
+  </div>
+</div>
+<div class="card">
+  <h2>Pour Mix</h2>
+  <div id="mixes" class="mix-grid"></div>
+</div>
+<div class="card">
+  <h2>Manual Motors</h2>
+  <div id="motors" class="motor-grid"></div>
+</div>
+<div class="card">
+  <h2>Calibration</h2>
+  <div class="row">
+    <button class="btn btn-blue" onclick="send({action:'cal_reset'})">Reset All</button>
+    <button class="btn btn-warn" onclick="send({action:'cal_save'})">Save Calibration</button>
+  </div>
+  <div id="cals" class="cal-grid"></div>
+</div>
+<div class="row" style="justify-content:center;margin:14px 0">
+  <a href="/">&larr; Back to Mixer</a>
+</div>
+<div id="toast" class="toast"></div>
+<script>
+let state={};
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.style.display='block';setTimeout(()=>t.style.display='none',1800);}
+function send(body){fetch('/api/controls/action',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}).then(r=>r.json()).then(()=>refresh()).catch(()=>toast('Action failed'))}
+function refresh(){fetch('/api/controls/state').then(r=>r.json()).then(j=>{state=j;render();}).catch(()=>toast('Load failed'))}
+function render(){
+  document.getElementById('globalState').textContent=`WiFi: ${state.wifi?'on':'off'} | Buzzer: ${state.buzzer?'on':'off'} | Language: ${state.language===1?'TR':'EN'} | Cal motor: ${state.calMotor||1}`;
+  const pourText = state.pourActive
+    ? `Mix ${state.pourMix}: ${state.pourStatus} • ${Number(state.pourElapsed||0).toFixed(1)} s / ${Number(state.pourTotal||0).toFixed(1)} s`
+    : 'Idle';
+  document.getElementById('pourState').textContent = pourText;
+  document.getElementById('stopPourBtn').style.display = state.pourActive ? 'inline-block' : 'none';
+  const mixes=document.getElementById('mixes');mixes.innerHTML='';
+  (state.mixes||[]).forEach(m=>{const d=document.createElement('div');d.className='mix-item';d.innerHTML=`<b>Mix ${m.id}</b><div class="small">${m.name0||''}<br>${m.name1||''}</div><button class="btn btn-main" onclick="send({action:'pour',mix:${m.id}})">Pour</button>`;mixes.appendChild(d);});
+  const motors=document.getElementById('motors');motors.innerHTML='';
+  (state.motors||[]).forEach(m=>{const d=document.createElement('div');d.className='motor-item';d.innerHTML=`<b>M${m.id}</b><div class="small">${m.running?'running':'stopped'}</div><div class="row"><button class="btn btn-main" onclick="send({action:'motor_on',motor:${m.id}})">On</button><button class="btn btn-danger" onclick="send({action:'motor_off',motor:${m.id}})">Off</button></div>`;motors.appendChild(d);});
+  const cals=document.getElementById('cals');cals.innerHTML='';
+  (state.cals||[]).forEach(m=>{const d=document.createElement('div');d.className='cal-item';d.innerHTML=`<b>M${m.id}</b><div class="small">${m.value.toFixed(1)} s</div><div class="row"><button class="btn btn-blue" onclick="send({action:'cal_set',motor:${m.id}})">Select</button><button class="btn btn-blue" onclick="send({action:'cal_dec'})">-</button><button class="btn btn-blue" onclick="send({action:'cal_inc'})">+</button></div>`;cals.appendChild(d);});
+}
+refresh();setInterval(refresh,1500);
+</script></body></html>
+)rawhtml";
+
+static void handleControlsPage() {
+    webServer->send_P(200, "text/html", CONTROLS_PAGE);
+}
+
 // Captive portal: redirect all unknown requests to root
 static void handleCaptivePortal() {
     webServer->sendHeader("Location", "http://192.168.4.1/", true);
@@ -377,6 +466,70 @@ static void handleCaptivePortal() {
 static void handleGetWifi() {
     char buf[160];
     snprintf(buf, sizeof(buf), "{\"ssid\":\"%s\",\"pass\":\"%s\"}", wifiSSID, wifiPass);
+    webServer->send(200, "application/json", buf);
+}
+
+static void jsonEscape(char *dst, size_t dstSize, const char *src) {
+    size_t pos = 0;
+    if (!dst || dstSize == 0) return;
+    if (!src) src = "";
+    for (const char *p = src; *p && pos + 1 < dstSize; ++p) {
+        unsigned char c = (unsigned char)*p;
+        const char *esc = nullptr;
+        char tmp[7];
+        switch (c) {
+            case '\\': esc = "\\\\"; break;
+            case '"':  esc = "\\\""; break;
+            case '\n': esc = "\\n"; break;
+            case '\r': esc = "\\r"; break;
+            case '\t': esc = "\\t"; break;
+            default:
+                if (c < 0x20) {
+                    snprintf(tmp, sizeof(tmp), "\\u%04x", c);
+                    esc = tmp;
+                }
+        }
+        if (esc) {
+            size_t len = strlen(esc);
+            if (pos + len >= dstSize) break;
+            memcpy(dst + pos, esc, len);
+            pos += len;
+        } else {
+            dst[pos++] = (char)c;
+        }
+    }
+    dst[pos] = '\0';
+}
+
+static void handleGetControlsState() {
+    char buf[4096];
+    char escName0[48], escName1[48];
+    int len = snprintf(buf, sizeof(buf),
+        "{\"wifi\":%d,\"buzzer\":%d,\"language\":%d,\"calMotor\":%d,\"state\":%d,\"viewMix\":%d,\"editMix\":%d,"
+        "\"pourActive\":%d,\"pourMix\":%d,\"pourStatus\":\"%s\",\"pourElapsed\":%.1f,\"pourTotal\":%.1f,\"mixes\":[",
+        hal_wifiIsActive() ? 1 : 0, app_webBuzzerEnabled() ? 1 : 0, app_webLanguage(),
+        app_webCurrentCalibrationMotor(), app_webCurrentState(), app_webCurrentViewMix(), app_webCurrentEditMix(),
+        app_webPourActive() ? 1 : 0, app_webPourMix(), app_webPourStatusText(), app_webPourElapsed(), app_webPourTotal());
+    for (int mix = 1; mix <= 9 && len > 0 && len < (int)sizeof(buf); mix++) {
+        jsonEscape(escName0, sizeof(escName0), app_webMixName(mix, 0));
+        jsonEscape(escName1, sizeof(escName1), app_webMixName(mix, 1));
+        len += snprintf(buf + len, sizeof(buf) - len, "%s{\"id\":%d,\"name0\":\"%s\",\"name1\":\"%s\"}",
+                        (mix == 1 ? "" : ","), mix, escName0, escName1);
+    }
+    len += snprintf(buf + len, sizeof(buf) - len, "],\"motors\":[");
+    for (int motor = 1; motor <= 8 && len > 0 && len < (int)sizeof(buf); motor++) {
+        bool running = app_webMotorIsManualOn(motor);
+        len += snprintf(buf + len, sizeof(buf) - len, "%s{\"id\":%d,\"running\":%d}",
+                        (motor == 1 ? "" : ","), motor, running);
+    }
+    len += snprintf(buf + len, sizeof(buf) - len, "],\"cals\":[");
+    for (int motor = 1; motor <= 8 && len > 0 && len < (int)sizeof(buf); motor++) {
+        float val = 0.0f;
+        app_webGetCalibrationValue(motor, val);
+        len += snprintf(buf + len, sizeof(buf) - len, "%s{\"id\":%d,\"value\":%.1f}",
+                        (motor == 1 ? "" : ","), motor, val);
+    }
+    snprintf(buf + len, sizeof(buf) - len, "]}");
     webServer->send(200, "application/json", buf);
 }
 
@@ -423,6 +576,45 @@ static void handlePostWifi() {
     } else {
         webServer->send(500, "application/json", "{\"error\":\"write failed\"}");
     }
+}
+
+static void handlePostControlsAction() {
+    if (!webServer->hasArg("plain")) {
+        webServer->send(400, "application/json", "{\"error\":\"no body\"}");
+        return;
+    }
+    String body = webServer->arg("plain");
+    auto has = [&](const char *pattern) { return body.indexOf(pattern) >= 0; };
+    if (has("\"action\":\"pour\"")) {
+        int mix = body.substring(body.indexOf("\"mix\":") + 6).toInt();
+        app_webRequestPourMix(mix);
+    } else if (has("\"action\":\"motor_on\"")) {
+        int motor = body.substring(body.indexOf("\"motor\":") + 8).toInt();
+        app_webRequestMotorOn(motor);
+    } else if (has("\"action\":\"motor_off\"")) {
+        int motor = body.substring(body.indexOf("\"motor\":") + 8).toInt();
+        app_webRequestMotorOff(motor);
+    } else if (has("\"action\":\"buzzer_toggle\"")) {
+        app_webRequestToggleBuzzer();
+    } else if (has("\"action\":\"language_toggle\"")) {
+        app_webRequestToggleLanguage();
+    } else if (has("\"action\":\"wifi_toggle\"")) {
+        app_webRequestToggleWifi();
+    } else if (has("\"action\":\"cal_set\"")) {
+        int motor = body.substring(body.indexOf("\"motor\":") + 8).toInt();
+        app_webRequestSetCalibrationMotor(motor);
+    } else if (has("\"action\":\"cal_inc\"")) {
+        app_webRequestAdjustCalibration(1);
+    } else if (has("\"action\":\"cal_dec\"")) {
+        app_webRequestAdjustCalibration(-1);
+    } else if (has("\"action\":\"cal_reset\"")) {
+        app_webRequestResetCalibration();
+    } else if (has("\"action\":\"cal_save\"")) {
+        app_webRequestSaveCalibration();
+    } else if (has("\"action\":\"pour_stop\"")) {
+        app_webRequestStopPour();
+    }
+    webServer->send(200, "application/json", "{\"ok\":true}");
 }
 
 // ============================================
@@ -562,10 +754,13 @@ bool hal_wifiStart() {
 
     webServer = new WebServer(80);
     webServer->on("/", HTTP_GET, handleIndex);
+    webServer->on("/controls", HTTP_GET, handleControlsPage);
     webServer->on("/api/mixes", HTTP_GET, handleGetMixes);
     webServer->on("/api/mixes", HTTP_POST, handlePostMixes);
     webServer->on("/api/wifi", HTTP_GET, handleGetWifi);
     webServer->on("/api/wifi", HTTP_POST, handlePostWifi);
+    webServer->on("/api/controls/state", HTTP_GET, handleGetControlsState);
+    webServer->on("/api/controls/action", HTTP_POST, handlePostControlsAction);
     webServer->on("/api/export", HTTP_GET, handleExportMixes);
     webServer->on("/api/import", HTTP_POST, handleImportMixes);
     // OTA firmware + filesystem update

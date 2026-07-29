@@ -137,4 +137,35 @@ bool hal_wifiMixesUpdated();
 const char* hal_wifiGetSSID();
 const char* hal_wifiGetPass();
 
+// Web control bridge used by the Controls page.
+void app_webRequestPourMix(int mixId);
+void app_webRequestMotorOn(int motorId);
+void app_webRequestMotorOff(int motorId);
+void app_webRequestToggleBuzzer();
+void app_webRequestToggleLanguage();
+void app_webRequestToggleWifi();
+void app_webRequestSetCalibrationMotor(int motorId);
+void app_webRequestAdjustCalibration(int delta);
+void app_webRequestResetCalibration();
+void app_webRequestSaveCalibration();
+bool app_webHasPendingWebAction();
+void app_webClearPendingWebAction();
+int  app_webCurrentCalibrationMotor();
+bool app_webBuzzerEnabled();
+int  app_webLanguage();
+bool app_webWifiActive();
+int  app_webCurrentViewMix();
+int  app_webCurrentEditMix();
+int  app_webCurrentState();
+void app_webGetCalibrationValue(int motorId, float &value);
+bool app_webMotorIsManualOn(int motorId);
+void app_webGetMixValue(int mixId, int motorId, int &value);
+const char* app_webMixName(int mixId, int line);
+bool app_webPourActive();
+int app_webPourMix();
+const char* app_webPourStatusText();
+float app_webPourElapsed();
+float app_webPourTotal();
+void app_webRequestStopPour();
+
 #endif // HAL_H
